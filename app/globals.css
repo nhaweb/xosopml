@@ -173,6 +173,15 @@
   }
 }
 
+@media print {
+  header, footer, .no-print { display: none !important; }
+  body { background: white !important; color: black !important; font-size: 10pt; }
+  .print-sheet { max-width: none !important; padding: 0 !important; }
+  .print-sheet .rounded-2xl, .print-sheet .rounded-xl { border-radius: 0 !important; box-shadow: none !important; }
+  .print-sheet .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8pt; }
+  .print-a5 { font-size: 9pt; }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

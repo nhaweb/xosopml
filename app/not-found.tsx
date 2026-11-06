@@ -1,0 +1,2 @@
+import Link from 'next/link'
+export default function NotFound() { return <main className="mx-auto grid min-h-[60vh] max-w-3xl place-items-center px-4 py-16 text-center"><div><p className="text-sm font-bold uppercase tracking-[0.3em] text-primary">404</p><h1 className="mt-3 text-4xl font-black">Không tìm thấy trang</h1><p className="mt-3 text-muted-foreground">Đường dẫn có thể đã thay đổi hoặc chưa được mở.</p><Link href="/" className="mt-6 inline-flex rounded-lg bg-primary px-4 py-2 font-semibold text-primary-foreground">Về trang chủ</Link></div></main> }
