@@ -19,11 +19,15 @@ import {
   Dices,
   ScrollText,
   Printer,
+  BarChart3,
+  Table,
 } from 'lucide-react';
 import { getLotteryResults } from '@/lib/mock-lottery-data';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
 import { LiveCountdownBanner } from '@/components/lottery/live-countdown-banner';
 import { WeeklyScheduleMatrix } from '@/components/lottery/weekly-schedule-matrix';
+import { ProvinceQuickStrip } from '@/components/lottery/province-quick-strip';
+import { QuickTicketCheckerBar } from '@/components/lottery/quick-ticket-checker-bar';
 import { TicketCheckerModal } from '@/components/lottery/ticket-checker-modal';
 import { VietlottKenoWidget } from '@/components/lottery/vietlott-keno-widget';
 import { audioSynth } from '@/lib/audio-synthesizer';
@@ -37,6 +41,8 @@ const navItems = [
   { label: 'XSMB', href: '#xsmb' },
   { label: 'Quay Thử', href: '/quay-thu', icon: Dices },
   { label: 'Sớ Đầu Đuôi', href: '/so-dau-duoi', icon: ScrollText },
+  { label: 'Tần Suất', href: '/thong-ke/tan-suat', icon: BarChart3 },
+  { label: 'Bảng ĐB', href: '/thong-ke/giai-dac-biet', icon: Table },
   { label: 'Sổ Mơ', href: '/so-mo', icon: BookOpen },
   { label: 'Lô Gan', href: '/thong-ke/lo-gan', icon: TrendingUp },
   { label: 'In Vé Dò', href: '/in-ve-do', icon: Printer },
@@ -186,6 +192,9 @@ export default function Page() {
         {/* Live Countdown & Direct Status Bar */}
         <LiveCountdownBanner />
 
+        {/* Thanh Cuộn Nhanh 63 Đài Tỉnh */}
+        <ProvinceQuickStrip />
+
         {/* Banner Tra Cứu & Bộ Chọn Ngày */}
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -228,6 +237,9 @@ export default function Page() {
             </div>
           </div>
         </div>
+
+        {/* Thanh Dò Vé Nhanh Tại Chỗ */}
+        <QuickTicketCheckerBar provinces={allProvinces} />
 
         {/* 3 Regional Lottery Result Boards */}
         <div className="flex flex-col gap-8">
@@ -299,6 +311,8 @@ export default function Page() {
             <a href="#xsmb" className="hover:underline">XSMB</a>
             <Link href="/quay-thu" className="hover:underline">Quay Thử</Link>
             <Link href="/so-dau-duoi" className="hover:underline">Sớ Đầu Đuôi</Link>
+            <Link href="/thong-ke/tan-suat" className="hover:underline">Tần Suất</Link>
+            <Link href="/thong-ke/giai-dac-biet" className="hover:underline">Bảng ĐB</Link>
             <Link href="/so-mo" className="hover:underline">Sổ Mơ</Link>
             <Link href="/thong-ke/lo-gan" className="hover:underline">Lô Gan</Link>
             <Link href="/in-ve-do" className="hover:underline">In Vé Dò</Link>

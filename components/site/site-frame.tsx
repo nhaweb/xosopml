@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Menu, Moon, Radio, Sun, TrendingUp, Trophy, X, Dices, ScrollText, Printer } from 'lucide-react';
+import { BookOpen, Menu, Moon, Radio, Sun, TrendingUp, Trophy, X, Dices, ScrollText, Printer, BarChart3, Table } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 
 const navItems = [
   { label: 'Trang chủ', href: '/' },
   { label: 'Quay thử', href: '/quay-thu', icon: Dices },
   { label: 'Sớ đầu đuôi', href: '/so-dau-duoi', icon: ScrollText },
+  { label: 'Tần suất', href: '/thong-ke/tan-suat', icon: BarChart3 },
+  { label: 'Bảng ĐB', href: '/thong-ke/giai-dac-biet', icon: Table },
   { label: 'Sổ mơ', href: '/so-mo', icon: BookOpen },
   { label: 'Lô gan', href: '/thong-ke/lo-gan', icon: TrendingUp },
   { label: 'In vé dò', href: '/in-ve-do', icon: Printer },
