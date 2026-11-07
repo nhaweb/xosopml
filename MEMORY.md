@@ -109,3 +109,7 @@ d:\xosopml\
 | **07/11/2026** | **Antigravity** | Tích hợp Bộ Dò Vé Số Nhanh (`ticket-checker-modal.tsx`), Chuông báo Web Audio (`audio-synthesizer.ts`), Khối Vietlott/Keno (`vietlott-keno-widget.tsx`). | Hoàn thành |
 | **07/11/2026** | **Antigravity** | Xây dựng Tiện ích Quay Thử Xổ Số (`/quay-thu`) với hiệu ứng số nhảy & âm thanh chuông báo; Thêm CSS `@media print` cho bản in vé dò A4. | Hoàn thành |
 | **07/11/2026** | **Antigravity** | Thiết lập file bộ nhớ vĩnh viễn `MEMORY.md` và file tự động định tuyến `.cursorrules` cho Cursor. | Hoàn thành |
+| **07/11/2026** | **Antigravity** | Xây dựng Bảng Đếm Ngược Trực Tiếp Live (`live-countdown-banner.tsx`) với đồng hồ đếm ngược đến 16:15, 17:15, 18:15. | Hoàn thành |
+| **07/11/2026** | **Antigravity** | Xây dựng Ma Trận Lịch Mở Thưởng 3 Miền Trong Tuần (`weekly-schedule-matrix.tsx`), highlight ngày hôm nay. | Hoàn thành |
+| **07/11/2026** | **Antigravity** | Xây dựng Trang Sớ Đầu Đuôi (`/so-dau-duoi`) thống kê 2 số cuối Giải Đặc Biệt và Giải 8 qua 14 ngày. | Hoàn thành |
+| **07/11/2026** | **Antigravity** | Xây dựng Trang In Vé Dò Chuyên Nghiệp (`/in-ve-do`) chuẩn giấy A4 cho đại lý bán vé số. | Hoàn thành |

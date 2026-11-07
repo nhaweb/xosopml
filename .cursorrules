@@ -12,3 +12,4 @@ You are an expert AI engineer collaborating with Antigravity on this Next.js pro
 - Styling: Tailwind CSS v4 + Lucide React.
 - Types: All lottery models live in `types/lottery.ts`. Do not define duplicate lottery interfaces.
 - Digits format: Always use `font-mono tabular-nums` for lottery numbers so digits align properly.
+

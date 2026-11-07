@@ -16,9 +16,14 @@ import {
   Search,
   Volume2,
   VolumeX,
+  Dices,
+  ScrollText,
+  Printer,
 } from 'lucide-react';
 import { getLotteryResults } from '@/lib/mock-lottery-data';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
+import { LiveCountdownBanner } from '@/components/lottery/live-countdown-banner';
+import { WeeklyScheduleMatrix } from '@/components/lottery/weekly-schedule-matrix';
 import { TicketCheckerModal } from '@/components/lottery/ticket-checker-modal';
 import { VietlottKenoWidget } from '@/components/lottery/vietlott-keno-widget';
 import { audioSynth } from '@/lib/audio-synthesizer';
@@ -30,8 +35,11 @@ const navItems = [
   { label: 'XSMN', href: '#xsmn' },
   { label: 'XSMT', href: '#xsmt' },
   { label: 'XSMB', href: '#xsmb' },
+  { label: 'Quay Thử', href: '/quay-thu', icon: Dices },
+  { label: 'Sớ Đầu Đuôi', href: '/so-dau-duoi', icon: ScrollText },
   { label: 'Sổ Mơ', href: '/so-mo', icon: BookOpen },
   { label: 'Lô Gan', href: '/thong-ke/lo-gan', icon: TrendingUp },
+  { label: 'In Vé Dò', href: '/in-ve-do', icon: Printer },
 ];
 
 export default function Page() {
@@ -175,6 +183,9 @@ export default function Page() {
 
       {/* Main Content Area */}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8 lg:px-8">
+        {/* Live Countdown & Direct Status Bar */}
+        <LiveCountdownBanner />
+
         {/* Banner Tra Cứu & Bộ Chọn Ngày */}
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -251,6 +262,9 @@ export default function Page() {
           />
         </div>
 
+        {/* Lịch Mở Thưởng 3 Miền Trong Tuần */}
+        <WeeklyScheduleMatrix />
+
         {/* Khối Điện toán Vietlott & Keno */}
         <VietlottKenoWidget />
 
@@ -279,12 +293,15 @@ export default function Page() {
           <p className="font-semibold text-foreground">
             © 2026 XSKT Minh Ngọc Clone — Dữ liệu mẫu phục vụ phát triển
           </p>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4 justify-center">
             <a href="#xsmn" className="hover:underline">XSMN</a>
             <a href="#xsmt" className="hover:underline">XSMT</a>
             <a href="#xsmb" className="hover:underline">XSMB</a>
+            <Link href="/quay-thu" className="hover:underline">Quay Thử</Link>
+            <Link href="/so-dau-duoi" className="hover:underline">Sớ Đầu Đuôi</Link>
             <Link href="/so-mo" className="hover:underline">Sổ Mơ</Link>
             <Link href="/thong-ke/lo-gan" className="hover:underline">Lô Gan</Link>
+            <Link href="/in-ve-do" className="hover:underline">In Vé Dò</Link>
           </div>
         </div>
       </footer>
