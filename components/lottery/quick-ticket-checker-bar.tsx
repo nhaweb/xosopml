@@ -109,3 +109,4 @@ export function QuickTicketCheckerBar({ provinces }: QuickTicketCheckerBarProps)
     </div>
   );
 }
+

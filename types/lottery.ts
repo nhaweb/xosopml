@@ -7,6 +7,9 @@ export interface ProvinceInfo {
   region: Region;
   drawDays: number[];     // 0: CN, 1: T2, ..., 6: T7
   drawTime: string;       // '16:15', '17:15', '18:15'
+  companyName?: string;
+  companyAddress?: string;
+  companyPhone?: string;
 }
 
 export interface PrizeRow {
