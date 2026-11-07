@@ -94,3 +94,18 @@ d:\xosopml\
    - Tất cả đều kế thừa types từ `types/lottery.ts`.
 3. **Giữ nguyên định dạng Monospace**:
    - Mọi dãy số xổ số phải dùng class `font-mono tabular-nums` để các chữ số thẳng hàng tuyệt đối.
+
+
+
+---
+
+## 5. Nhật Ký Tiến Độ & Trạng Thái (Work Log)
+
+| Thời gian | Tác nhân | Nội dung công việc đã hoàn thành | Ghi chú / Trạng thái |
+| :--- | :---: | :--- | :--- |
+| **07/11/2026** | **Antigravity** | Tạo core types (`types/lottery.ts`), lịch quay 63 đài (`config/lottery-provinces.ts`), helper tính lô tô đầu đuôi (`lib/loto-calculator.ts`). | Hoàn thành |
+| **07/11/2026** | **Antigravity** | Xây dựng Bảng kết quả 3 miền Minh Ngọc (`region-lottery-board.tsx`), bộ lọc 2/3 số & tô số (`digit-filter-bar.tsx`), bảng Lô tô Đầu - Đuôi (`loto-head-tail-table.tsx`). | Hoàn thành |
+| **07/11/2026** | **Cursor** | Xây dựng Sổ mơ lô đề (`/so-mo`), Thống kê Lô gan (`/thong-ke/lo-gan`), Tra cứu theo ngày (`/ngay/[date]`), Chi tiết đài (`/[region]/[province]`). | Hoàn thành |
+| **07/11/2026** | **Antigravity** | Tích hợp Bộ Dò Vé Số Nhanh (`ticket-checker-modal.tsx`), Chuông báo Web Audio (`audio-synthesizer.ts`), Khối Vietlott/Keno (`vietlott-keno-widget.tsx`). | Hoàn thành |
+| **07/11/2026** | **Antigravity** | Xây dựng Tiện ích Quay Thử Xổ Số (`/quay-thu`) với hiệu ứng số nhảy & âm thanh chuông báo; Thêm CSS `@media print` cho bản in vé dò A4. | Hoàn thành |
+| **07/11/2026** | **Antigravity** | Thiết lập file bộ nhớ vĩnh viễn `MEMORY.md` và file tự động định tuyến `.cursorrules` cho Cursor. | Hoàn thành |

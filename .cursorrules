@@ -1,0 +1,14 @@
+# Cursor Rules for Xo So Minh Ngoc Clone (xosopml)
+
+You are an expert AI engineer collaborating with Antigravity on this Next.js project.
+
+## CORE DIRECTIVE: PERSISTENT MEMORY
+- **Single Source of Truth**: Always read `MEMORY.md` at the project root before starting work to understand current architecture, existing routes, and task progress.
+- **Update Memory**: Whenever you finish a feature, add a new route, or make an architectural decision, append an entry to the `Nhật Ký Tiến Độ (Work Log)` section in `MEMORY.md`.
+
+## TECH STACK & CONVENTIONS
+- Framework: Next.js 16 (App Router)
+- Build command: Always use `next build --webpack` (configured in `package.json`). Do not use raw Turbopack because of Windows process spawning issues with PostCSS.
+- Styling: Tailwind CSS v4 + Lucide React.
+- Types: All lottery models live in `types/lottery.ts`. Do not define duplicate lottery interfaces.
+- Digits format: Always use `font-mono tabular-nums` for lottery numbers so digits align properly.
