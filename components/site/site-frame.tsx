@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Menu, Moon, Radio, Sun, TrendingUp, Trophy, X, Dices, ScrollText, Printer, BarChart3, Table } from 'lucide-react';
+import { BookOpen, Menu, Moon, Radio, Sun, TrendingUp, Trophy, X, Dices, ScrollText, Printer, BarChart3, Table, ShoppingBag, User } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 
 const navItems = [
   { label: 'Trang chủ', href: '/' },
+  { label: 'Mua Vé Online', href: '/mua-ve-online', icon: ShoppingBag },
+  { label: 'Dashboard', href: '/dashboard', icon: User },
   { label: 'Quay thử', href: '/quay-thu', icon: Dices },
   { label: 'Sớ đầu đuôi', href: '/so-dau-duoi', icon: ScrollText },
   { label: 'Tần suất', href: '/thong-ke/tan-suat', icon: BarChart3 },

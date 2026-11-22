@@ -38,6 +38,8 @@ import { siteConfig } from '@/config/site';
 
 const navItems = [
   { label: 'Trang chủ', href: '#top' },
+  { label: 'Mua Vé Online', href: '/mua-ve-online', icon: Search },
+  { label: 'Dashboard', href: '/dashboard', icon: Trophy },
   { label: 'XSMN', href: '#xsmn' },
   { label: 'XSMT', href: '#xsmt' },
   { label: 'XSMB', href: '#xsmb' },
@@ -346,6 +348,8 @@ export default function Page() {
             <a href="#xsmn" className="hover:underline">XSMN</a>
             <a href="#xsmt" className="hover:underline">XSMT</a>
             <a href="#xsmb" className="hover:underline">XSMB</a>
+            <Link href="/mua-ve-online" className="hover:underline font-bold text-red-600">Mua Vé Online</Link>
+            <Link href="/dashboard" className="hover:underline font-bold text-amber-600">User Dashboard</Link>
             <Link href="/quay-thu" className="hover:underline">Quay Thử</Link>
             <Link href="/so-dau-duoi" className="hover:underline">Sớ Đầu Đuôi</Link>
             <Link href="/thong-ke/tan-suat" className="hover:underline">Tần Suất</Link>

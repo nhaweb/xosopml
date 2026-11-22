@@ -57,13 +57,12 @@ export function HeroPromoSection() {
         </p>
 
         {/* Nút Đăng ký tài khoản (CTA mở lối cho User Dashboard) */}
-        <button
-          type="button"
-          onClick={() => alert('Tính năng Đăng Ký Tài Khoản & User Dashboard đang chuẩn bị ra mắt!')}
+        <Link
+          href="/dashboard"
           className="flex items-center justify-center gap-2 w-full rounded-xl bg-gradient-to-r from-red-600 to-amber-600 px-4 py-2.5 text-xs font-black text-white shadow-md hover:from-red-700 hover:to-amber-700 transition-all hover:scale-[1.02]"
         >
-          <UserPlus className="size-4" /> Đăng Ký Tài Khoản Ngay (Miễn Phí)
-        </button>
+          <UserPlus className="size-4" /> Đăng Ký / Vào User Dashboard
+        </Link>
       </div>
 
       {/* CỘT PHẢI: Banner hấp dẫn thay thế */}
