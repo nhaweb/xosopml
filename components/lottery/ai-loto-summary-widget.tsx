@@ -1,10 +1,43 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bot, Flame, Snowflake, TrendingUp, Sparkles, ArrowRight, Zap } from 'lucide-react';
+import { Bot, Flame, Snowflake, Sparkles, Zap } from 'lucide-react';
+import { AiSummaryStatsData } from '@/lib/services/xosoApi';
+
+const DEFAULT_SUMMARY: AiSummaryStatsData = {
+  loGanTop: [
+    { num: '37', days: 20, maxGan: 25, warn: true },
+    { num: '55', days: 19, maxGan: 22, warn: true },
+    { num: '30', days: 17, maxGan: 17, warn: true },
+    { num: '18', days: 12, maxGan: 31, warn: true },
+  ],
+  hotTop: [
+    { num: '14', count: 18 },
+    { num: '06', count: 16 },
+    { num: '17', count: 15 },
+    { num: '34', count: 15 },
+  ],
+  suggestedHeads: 'Đầu 1, Đầu 3',
+  suggestedPairs: '14 · 06 · 37',
+};
 
 export function AiLotoSummaryWidget() {
+  const [summary, setSummary] = useState<AiSummaryStatsData>(DEFAULT_SUMMARY);
+
+  useEffect(() => {
+    fetch('/api/xoso/stats?type=summary')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.data) {
+          setSummary(json.data);
+        }
+      })
+      .catch(() => {
+        // keep default fallback
+      });
+  }, []);
+
   return (
     <section className="mb-8 overflow-hidden rounded-3xl border-2 border-red-500/30 bg-gradient-to-br from-card via-card to-red-500/5 p-5 sm:p-6 shadow-md">
       {/* Widget Header */}
@@ -23,7 +56,7 @@ export function AiLotoSummaryWidget() {
               </span>
             </div>
             <h3 className="text-lg sm:text-xl font-black text-foreground mt-0.5">
-              Trung Tâm Thống Kê & Phân Tích Lô Tô Thông Minh
+              Trung Tâm Thống Kê &amp; Phân Tích Lô Tô Thông Minh
             </h3>
           </div>
         </div>
@@ -59,16 +92,11 @@ export function AiLotoSummaryWidget() {
           </div>
 
           <p className="text-xs text-muted-foreground mb-3">
-            Những con số lâu chưa xuất hiện ở cả 3 miền, có xác suất nổ trở lại cao:
+            Những con số lâu chưa xuất hiện nhất hiện tại, có xác suất nổ trở lại cao:
           </p>
 
           <div className="flex flex-wrap gap-2">
-            {[
-              { num: '47', days: 24, warn: true },
-              { num: '82', days: 19, warn: true },
-              { num: '15', days: 16, warn: true },
-              { num: '93', days: 14, warn: false },
-            ].map((item) => (
+            {summary.loGanTop.map((item) => (
               <div
                 key={item.num}
                 className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-mono ${
@@ -101,12 +129,7 @@ export function AiLotoSummaryWidget() {
           </p>
 
           <div className="flex flex-wrap gap-2">
-            {[
-              { num: '68', count: 16 },
-              { num: '79', count: 14 },
-              { num: '39', count: 13 },
-              { num: '88', count: 12 },
-            ].map((item) => (
+            {summary.hotTop.map((item) => (
               <div
                 key={item.num}
                 className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50/60 px-3 py-1.5 text-xs font-mono font-black text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
@@ -131,17 +154,21 @@ export function AiLotoSummaryWidget() {
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Mô hình học máy tổng hợp dữ liệu 3 miền phát hiện nhịp rơi:
+              Mô hình học máy tổng hợp dữ liệu thực tế phát hiện nhịp rơi:
             </p>
 
             <div className="mt-2.5 rounded-xl border bg-card/80 p-2.5 text-xs">
               <div className="flex items-center justify-between font-bold text-foreground">
                 <span>Đầu chạm tiềm năng:</span>
-                <span className="font-mono text-sm font-black text-red-600 dark:text-red-400">Đầu 3, Đầu 7</span>
+                <span className="font-mono text-sm font-black text-red-600 dark:text-red-400">
+                  {summary.suggestedHeads}
+                </span>
               </div>
               <div className="mt-1 flex items-center justify-between font-bold text-foreground">
-                <span>Cặp số phong thủy:</span>
-                <span className="font-mono text-sm font-black text-amber-600 dark:text-amber-400">39 · 79 · 68</span>
+                <span>Bộ số sáng giá:</span>
+                <span className="font-mono text-sm font-black text-amber-600 dark:text-amber-400">
+                  {summary.suggestedPairs}
+                </span>
               </div>
             </div>
           </div>
@@ -154,4 +181,3 @@ export function AiLotoSummaryWidget() {
     </section>
   );
 }
-

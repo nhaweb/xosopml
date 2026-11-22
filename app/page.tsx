@@ -1,15 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Check, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
-import { getLotteryResults } from '@/lib/mock-lottery-data';
+import { getFallbackLotteryResults } from '@/lib/fallback-lottery-data';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
 import { AiLotoSummaryWidget } from '@/components/lottery/ai-loto-summary-widget';
 import { LiveCountdownBanner } from '@/components/lottery/live-countdown-banner';
 import { WeeklyScheduleMatrix } from '@/components/lottery/weekly-schedule-matrix';
 import { TicketCheckerModal } from '@/components/lottery/ticket-checker-modal';
 import { VietlottKenoWidget } from '@/components/lottery/vietlott-keno-widget';
+import {
+  ApiDataSourceBanner,
+  LotteryBoardSkeleton,
+} from '@/components/lottery/lottery-board-skeleton';
 import { MinhLuanHeader } from '@/components/minhluan/minhluan-header';
 import { RotatingPromoBanner } from '@/components/minhluan/rotating-promo-banner';
 import { Stats3ColTable } from '@/components/minhluan/stats-3col-table';
@@ -17,6 +21,14 @@ import { LeftSidebar, RightSidebar } from '@/components/minhluan/sidebars';
 import { SiteFooter } from '@/components/site/site-footer';
 import { audioSynth } from '@/lib/audio-synthesizer';
 import { formatDate } from '@/lib/format';
+import { DayLotteryData } from '@/types/lottery';
+
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 export default function Page() {
   const [dark, setDark] = useState(false);
@@ -27,21 +39,28 @@ export default function Page() {
   const [activeRegionTab, setActiveRegionTab] = useState<'all' | 'south' | 'central' | 'north' | 'vietlott'>('all');
   const [showYesterdayFull, setShowYesterdayFull] = useState(true);
 
-  // Dữ liệu ngày đang chọn (mặc định Hôm nay)
-  const lotteryData = useMemo(() => getLotteryResults(activeDate), [activeDate]);
-
-  // Dữ liệu ngày trước đó (Hôm qua so với ngày đang chọn)
   const prevDate = useMemo(() => {
     const d = new Date(activeDate);
     d.setDate(d.getDate() - 1);
     return d;
   }, [activeDate]);
-  const prevLotteryData = useMemo(() => getLotteryResults(prevDate), [prevDate]);
 
-  const allProvinces = useMemo(
-    () => [...lotteryData.south, ...lotteryData.central, ...lotteryData.north],
-    [lotteryData]
+  // State dữ liệu lấy từ Server API (/api/xoso/draws -> xosoapi.online)
+  const [lotteryData, setLotteryData] = useState<DayLotteryData>(() =>
+    getFallbackLotteryResults(new Date())
   );
+  const [prevLotteryData, setPrevLotteryData] = useState<DayLotteryData>(() => {
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    return getFallbackLotteryResults(y);
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [apiMeta, setApiMeta] = useState<{
+    source: 'xosoapi.online' | 'fallback';
+    warning?: string;
+    isLiveWindow?: boolean;
+    revalidateSeconds?: number;
+  }>({ source: 'xosoapi.online', revalidateSeconds: 3600 });
 
   useEffect(() => {
     try {
@@ -53,6 +72,58 @@ export default function Page() {
       // ignore
     }
   }, []);
+
+  const loadDrawsFromServer = useCallback(async (targetDate: Date, yesterdayDate: Date) => {
+    setIsLoading(true);
+    try {
+      const [todayRes, prevRes] = await Promise.all([
+        fetch(`/api/xoso/draws?date=${toIsoDate(targetDate)}`),
+        fetch(`/api/xoso/draws?date=${toIsoDate(yesterdayDate)}`),
+      ]);
+
+      if (todayRes.ok) {
+        const todayJson = await todayRes.json();
+        if (todayJson?.data) {
+          setLotteryData(todayJson.data);
+          setApiMeta({
+            source: todayJson.source || 'fallback',
+            warning: todayJson.warning,
+            isLiveWindow: todayJson.isLiveWindow,
+            revalidateSeconds: todayJson.revalidateSeconds,
+          });
+        }
+      } else {
+        setLotteryData(getFallbackLotteryResults(targetDate));
+      }
+
+      if (prevRes.ok) {
+        const prevJson = await prevRes.json();
+        if (prevJson?.data) {
+          setPrevLotteryData(prevJson.data);
+        }
+      } else {
+        setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
+      }
+    } catch {
+      setLotteryData(getFallbackLotteryResults(targetDate));
+      setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
+      setApiMeta({
+        source: 'fallback',
+        warning: 'Không thể kết nối máy chủ API. Đang hiển thị dữ liệu dự phòng.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDrawsFromServer(activeDate, prevDate);
+  }, [activeDate, prevDate, loadDrawsFromServer]);
+
+  const allProvinces = useMemo(
+    () => [...lotteryData.south, ...lotteryData.central, ...lotteryData.north],
+    [lotteryData]
+  );
 
   const toggleDark = () => {
     const next = !dark;
@@ -90,7 +161,6 @@ export default function Page() {
     );
   }, [activeDate]);
 
-  // Sắp xếp thứ tự 3 miền theo miền ưu tiên
   const orderedRegions = useMemo(() => {
     const items = [
       {
@@ -133,7 +203,7 @@ export default function Page() {
 
   return (
     <div id="top" className={`min-h-screen bg-background text-foreground ${dark ? 'dark' : ''}`}>
-      {/* Header chuẩn Minh Ngọc / Minh Luân (#1, #2, #3 + Red Nav Bar) */}
+      {/* Header chuẩn Minh Luân (#1, #2, #3 + Red Nav Bar) */}
       <MinhLuanHeader
         activeDateStr={activeDateFormatted}
         allProvinces={allProvinces}
@@ -149,7 +219,7 @@ export default function Page() {
       {/* Main 3-Column Minh Ngọc Layout */}
       <main className="mx-auto max-w-[1260px] px-2.5 py-4 lg:px-4">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[215px_minmax(0,1fr)_235px]">
-          {/* CỘT TRÁI (#4, #7, #8 & Section 2 #1, #2, #3) */}
+          {/* CỘT TRÁI */}
           <div className="order-2 lg:order-1">
             <LeftSidebar
               activeDate={activeDate}
@@ -158,21 +228,28 @@ export default function Page() {
             />
           </div>
 
-          {/* CỘT GIỮA (#9 ở vị trí #5 -> #10 KQXS Hôm nay & Hôm qua -> #5 Bảng Thống Kê 3 Cột) */}
+          {/* CỘT GIỮA */}
           <div className="order-1 lg:order-2 min-w-0">
-            {/* #9 ĐẶT Ở VỊ TRÍ SỐ 5: Banner thay đổi 2 dòng chữ MUA VÉ SỐ ONLINE <-> ĐĂNG KÝ THÀNH VIÊN NGAY */}
             <RotatingPromoBanner />
 
-            {/* Live Countdown Bar gọn gàng */}
             <LiveCountdownBanner />
 
-            {/* #10 MOVE LÊN NGAY DƯỚI #9: Tiêu đề KQXS & Bộ chọn miền ưu tiên */}
+            {/* Trạng thái kết nối xosoapi.online & Caching */}
+            <ApiDataSourceBanner
+              source={apiMeta.source}
+              warning={apiMeta.warning}
+              isLiveWindow={apiMeta.isLiveWindow}
+              revalidateSeconds={apiMeta.revalidateSeconds}
+              isLoading={isLoading}
+              onRefresh={() => loadDrawsFromServer(activeDate, prevDate)}
+            />
+
+            {/* #10: Tiêu đề KQXS & Bộ chọn miền ưu tiên */}
             <div id="kqxs-hom-nay" className="mb-4 rounded-xl border bg-card p-3.5 text-center shadow-2xs">
               <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-foreground">
                 KẾT QUẢ XỔ SỐ KIẾN THIẾT {lotteryData.formattedDate}
               </h1>
 
-              {/* Chọn miền ưu tiên (giống Minh Ngọc) */}
               <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs font-bold">
                 <span className="text-muted-foreground">Chọn miền ưu tiên:</span>
                 {[
@@ -230,7 +307,6 @@ export default function Page() {
                 </button>
               </div>
 
-              {/* Dòng trạng thái xanh chuẩn Minh Ngọc */}
               <div className="mt-2.5 flex items-center justify-center gap-1.5 rounded-md border border-blue-200/70 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
                 <Check className="size-4 text-emerald-600 stroke-[3]" />
                 <span>
@@ -242,21 +318,25 @@ export default function Page() {
               </div>
             </div>
 
-            {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (3 MIỀN) */}
+            {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (3 MIỀN) HOẶC SKELETON LOADING */}
             {activeRegionTab !== 'vietlott' && (
-              <div className="flex flex-col gap-6">
-                {orderedRegions.map((board) => (
-                  <RegionLotteryBoard
-                    key={board.id}
-                    id={board.id}
-                    title={board.title}
-                    regionCode={board.regionCode}
-                    drawTime={board.drawTime}
-                    dateStr={lotteryData.formattedDate}
-                    results={board.results}
-                  />
-                ))}
-              </div>
+              isLoading ? (
+                <LotteryBoardSkeleton count={3} />
+              ) : (
+                <div className="flex flex-col gap-6">
+                  {orderedRegions.map((board) => (
+                    <RegionLotteryBoard
+                      key={board.id}
+                      id={board.id}
+                      title={board.title}
+                      regionCode={board.regionCode}
+                      drawTime={board.drawTime}
+                      dateStr={lotteryData.formattedDate}
+                      results={board.results}
+                    />
+                  ))}
+                </div>
+              )
             )}
 
             {/* KHỐI HIỂN THỊ KẾT QUẢ XỔ SỐ NGÀY TRƯỚC ĐÓ (HÔM QUA) */}
@@ -293,41 +373,47 @@ export default function Page() {
 
                 {showYesterdayFull && (
                   <div className="space-y-6 p-3 sm:p-4">
-                    <RegionLotteryBoard
-                      id="xsmn-yesterday"
-                      title={`XSMN Hôm Qua — ${prevLotteryData.formattedDate}`}
-                      regionCode="18 Giải"
-                      drawTime="16:15"
-                      dateStr={prevLotteryData.formattedDate}
-                      results={prevLotteryData.south}
-                    />
-                    <RegionLotteryBoard
-                      id="xsmt-yesterday"
-                      title={`XSMT Hôm Qua — ${prevLotteryData.formattedDate}`}
-                      regionCode="18 Giải"
-                      drawTime="17:15"
-                      dateStr={prevLotteryData.formattedDate}
-                      results={prevLotteryData.central}
-                    />
-                    <RegionLotteryBoard
-                      id="xsmb-yesterday"
-                      title={`XSMB Hôm Qua — ${prevLotteryData.formattedDate}`}
-                      regionCode="27 Giải"
-                      drawTime="18:15"
-                      dateStr={prevLotteryData.formattedDate}
-                      results={prevLotteryData.north}
-                    />
+                    {isLoading ? (
+                      <LotteryBoardSkeleton count={2} />
+                    ) : (
+                      <>
+                        <RegionLotteryBoard
+                          id="xsmn-yesterday"
+                          title={`XSMN Hôm Qua — ${prevLotteryData.formattedDate}`}
+                          regionCode="18 Giải"
+                          drawTime="16:15"
+                          dateStr={prevLotteryData.formattedDate}
+                          results={prevLotteryData.south}
+                        />
+                        <RegionLotteryBoard
+                          id="xsmt-yesterday"
+                          title={`XSMT Hôm Qua — ${prevLotteryData.formattedDate}`}
+                          regionCode="18 Giải"
+                          drawTime="17:15"
+                          dateStr={prevLotteryData.formattedDate}
+                          results={prevLotteryData.central}
+                        />
+                        <RegionLotteryBoard
+                          id="xsmb-yesterday"
+                          title={`XSMB Hôm Qua — ${prevLotteryData.formattedDate}`}
+                          regionCode="27 Giải"
+                          drawTime="18:15"
+                          dateStr={prevLotteryData.formattedDate}
+                          results={prevLotteryData.north}
+                        />
+                      </>
+                    )}
                   </div>
                 )}
               </section>
             )}
 
-            {/* #5 MOVE XUỐNG DƯỚI: Bảng Thống Kê 3 Cột (ĐÃ BỎ CỘT LỊCH XỔ SỐ + IN ĐẬM TITLE) */}
+            {/* #5: Bảng Thống Kê 3 Cột */}
             <div className="mt-8">
               <Stats3ColTable lotteryData={lotteryData} />
             </div>
 
-            {/* AI Loto Intelligence Hub tổng hợp Tần suất & Gan cực đại */}
+            {/* AI Loto Intelligence Hub */}
             <div className="mt-6">
               <AiLotoSummaryWidget />
             </div>
@@ -343,21 +429,19 @@ export default function Page() {
             </div>
           </div>
 
-          {/* CỘT PHẢI (#6 Đổi Số Trúng Minh Luân, Section 2 #4 Tin tức, Section 2 #5 YouTube Logo @xosominhluan) */}
+          {/* CỘT PHẢI */}
           <div className="order-3">
             <RightSidebar />
           </div>
         </div>
       </main>
 
-      {/* Modal Dò Vé Số Nâng Cao */}
       <TicketCheckerModal
         isOpen={checkerOpen}
         onClose={() => setCheckerOpen(false)}
         availableResults={allProvinces}
       />
 
-      {/* Footer 4 Cột Nền Tối Chuẩn Spec (THƯƠNG HIỆU | TRA CỨU NHANH | THÔNG TIN & CHÍNH SÁCH | KẾT NỐI) */}
       <SiteFooter />
     </div>
   );

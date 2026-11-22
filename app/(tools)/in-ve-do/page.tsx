@@ -1,14 +1,23 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { SiteFrame } from '@/components/site/site-frame';
-import { getLotteryResults } from '@/lib/mock-lottery-data';
+import { getFallbackLotteryResults } from '@/lib/fallback-lottery-data';
+import { ApiDataSourceBanner, LotteryBoardSkeleton } from '@/components/lottery/lottery-board-skeleton';
 import { formatDate } from '@/lib/format';
-import { Printer, CalendarDays, Check, LayoutGrid } from 'lucide-react';
+import { Printer } from 'lucide-react';
+import { DayLotteryData } from '@/types/lottery';
 
 export default function InVeDoPage() {
   const [selectedRegion, setSelectedRegion] = useState<'south' | 'central' | 'north'>('south');
   const [dayOffset, setDayOffset] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiMeta, setApiMeta] = useState<{
+    source: 'xosoapi.online' | 'fallback';
+    warning?: string;
+    isLiveWindow?: boolean;
+    revalidateSeconds?: number;
+  }>({ source: 'xosoapi.online', revalidateSeconds: 3600 });
 
   const activeDate = useMemo(() => {
     const d = new Date();
@@ -16,7 +25,39 @@ export default function InVeDoPage() {
     return d;
   }, [dayOffset]);
 
-  const lotteryData = useMemo(() => getLotteryResults(activeDate), [activeDate]);
+  const [lotteryData, setLotteryData] = useState<DayLotteryData>(() =>
+    getFallbackLotteryResults(new Date())
+  );
+
+  const loadDraw = useCallback(async (targetDate: Date) => {
+    setIsLoading(true);
+    const iso = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    try {
+      const res = await fetch(`/api/xoso/draws?date=${iso}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data) {
+          setLotteryData(json.data);
+          setApiMeta({
+            source: json.source || 'fallback',
+            warning: json.warning,
+            isLiveWindow: json.isLiveWindow,
+            revalidateSeconds: json.revalidateSeconds,
+          });
+          return;
+        }
+      }
+      setLotteryData(getFallbackLotteryResults(targetDate));
+    } catch {
+      setLotteryData(getFallbackLotteryResults(targetDate));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDraw(activeDate);
+  }, [activeDate, loadDraw]);
 
   const currentProvinces = useMemo(() => {
     if (selectedRegion === 'south') return lotteryData.south;
@@ -112,7 +153,21 @@ export default function InVeDoPage() {
         </div>
       </div>
 
+      <div className="no-print">
+        <ApiDataSourceBanner
+          source={apiMeta.source}
+          warning={apiMeta.warning}
+          isLiveWindow={apiMeta.isLiveWindow}
+          revalidateSeconds={apiMeta.revalidateSeconds}
+          isLoading={isLoading}
+          onRefresh={() => loadDraw(activeDate)}
+        />
+      </div>
+
       {/* Printable Sheet (Tờ vé dò A4) */}
+      {isLoading ? (
+        <LotteryBoardSkeleton count={1} />
+      ) : (
       <div className="mx-auto max-w-4xl rounded-2xl border-2 border-black bg-white p-4 sm:p-8 text-black shadow-lg print:border-none print:shadow-none print:p-0">
         {/* Print Header */}
         <div className="border-b-2 border-black pb-3 text-center mb-4">
@@ -185,6 +240,7 @@ export default function InVeDoPage() {
           <span>Dò lại vé tại: https://xosominhluan.vn</span>
         </div>
       </div>
+      )}
     </SiteFrame>
   );
 }

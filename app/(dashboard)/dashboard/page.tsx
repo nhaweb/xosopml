@@ -219,8 +219,44 @@ export default function UserDashboardPage() {
   const [selectedElementId, setSelectedElementId] = useState('kim');
   const [birthYear, setBirthYear] = useState('1992');
 
-  // State Phân tích Chart theo đài (VIP)
+  // State Phân tích Chart theo đài (VIP) - Lấy dữ liệu thực tế từ /api/xoso/stats
   const [chartProvinceId, setChartProvinceId] = useState('dong-thap');
+  const [chartLoGan, setChartLoGan] = useState<Array<{ number: string; daysUnopened: number; maxGanHistory: number }>>(() =>
+    calculateLoGan('dong-thap').slice(0, 10)
+  );
+  const [chartHotFreq, setChartHotFreq] = useState<Array<{ number: string; count: number }>>(() =>
+    computeProvinceFrequency('dong-thap')
+  );
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      fetch(`/api/xoso/stats?type=lo-gan&province=${encodeURIComponent(chartProvinceId)}`).then((r) =>
+        r.ok ? r.json() : null
+      ),
+      fetch(`/api/xoso/stats?type=frequency&province=${encodeURIComponent(chartProvinceId)}&limit=30`).then((r) =>
+        r.ok ? r.json() : null
+      ),
+    ])
+      .then(([ganJson, freqJson]) => {
+        if (!active) return;
+        if (Array.isArray(ganJson?.data) && ganJson.data.length > 0) {
+          setChartLoGan(ganJson.data.slice(0, 10));
+        }
+        if (Array.isArray(freqJson?.data) && freqJson.data.length > 0) {
+          const sortedHot = [...freqJson.data]
+            .sort((a: { count: number }, b: { count: number }) => b.count - a.count)
+            .slice(0, 10);
+          setChartHotFreq(sortedHot);
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
+    return () => {
+      active = false;
+    };
+  }, [chartProvinceId]);
 
   // State AI Chat Trợ Lý Ảo Xổ Số (VIP - 10 tin nhắn / ngày)
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -278,19 +314,15 @@ export default function UserDashboardPage() {
     persistFavorites(favorites.filter((f) => f.id !== id));
   };
 
-  // Tính dữ liệu biểu đồ thật từ stats-calculator cho đài đang chọn
-  const chartLoGan = useMemo(() => calculateLoGan(chartProvinceId).slice(0, 10), [chartProvinceId]);
-  const chartHotFreq = useMemo(() => computeProvinceFrequency(chartProvinceId), [chartProvinceId]);
   const maxGanVal = Math.max(...chartLoGan.map((i) => i.daysUnopened), 1);
   const maxFreqVal = Math.max(...chartHotFreq.map((i) => i.count), 1);
 
   const selectedElement =
     FENG_SHUI_ELEMENTS.find((e) => e.id === selectedElementId) || FENG_SHUI_ELEMENTS[0];
 
-  // Hàm sinh câu trả lời Trợ lý ảo Xổ số dựa trên dữ liệu thực tế của đài
-  const generateAiReply = (question: string): string => {
+  // Hàm sinh câu trả lời Trợ lý ảo Xổ số dựa trên dữ liệu thực tế từ API xosoapi.online
+  const generateAiReplyAsync = async (question: string): Promise<string> => {
     const q = question.toLowerCase();
-    // Tìm đài được nhắc trong câu hỏi
     const matchedProvince =
       PROVINCES.find((p) => q.includes(p.name.toLowerCase())) ||
       (q.includes('đồng tháp')
@@ -299,24 +331,44 @@ export default function UserDashboardPage() {
         ? PROVINCES.find((p) => p.id === 'tphcm')
         : PROVINCES.find((p) => p.id === 'dong-thap'));
 
-    const prov = matchedProvince || PROVINCES[1]; // mặc định Đồng Tháp
-    const ganList = calculateLoGan(prov.id);
-    const freqList = computeProvinceFrequency(prov.id);
+    const prov = matchedProvince || PROVINCES[1];
+    let ganList = calculateLoGan(prov.id);
+    let freqList = computeProvinceFrequency(prov.id);
+
+    try {
+      const [ganRes, freqRes] = await Promise.all([
+        fetch(`/api/xoso/stats?type=lo-gan&province=${encodeURIComponent(prov.id)}`),
+        fetch(`/api/xoso/stats?type=frequency&province=${encodeURIComponent(prov.id)}&limit=30`),
+      ]);
+      if (ganRes.ok) {
+        const gJson = await ganRes.json();
+        if (Array.isArray(gJson?.data) && gJson.data.length > 0) ganList = gJson.data;
+      }
+      if (freqRes.ok) {
+        const fJson = await freqRes.json();
+        if (Array.isArray(fJson?.data) && fJson.data.length > 0) {
+          freqList = [...fJson.data].sort((a, b) => b.count - a.count);
+        }
+      }
+    } catch {
+      // use local fallback if network error
+    }
+
     const topGan2 = ganList.slice(0, 2);
     const topHot3 = freqList.slice(0, 3);
 
     if (q.includes('lâu ra') || q.includes('gan') || q.includes('10 ngày')) {
-      return `**Thống kê 2 cặp số lâu ra nhất đài ${prov.name}**:\n• Cặp **${topGan2[0]?.number}** — đã **${topGan2[0]?.daysUnopened} ngày** chưa về (gan cực đại lịch sử: ${topGan2[0]?.maxGanHistory} ngày).\n• Cặp **${topGan2[1]?.number}** — đã **${topGan2[1]?.daysUnopened} ngày** chưa về (gan cực đại lịch sử: ${topGan2[1]?.maxGanHistory} ngày).\n\n*Gợi ý*: Hai cặp này đang sát ngưỡng gan, bạn có thể theo dõi thêm ở tab **Biểu đồ chuyên sâu** hoặc chọn mua thử vé đuôi **${topGan2[0]?.number}** tại mục Mua Vé Online.`;
+      return `**Thống kê 2 cặp số lâu ra nhất đài ${prov.name}**:\n• Cặp **${topGan2[0]?.number}** — đã **${topGan2[0]?.daysUnopened} kỳ** chưa về (gan cực đại lịch sử: ${topGan2[0]?.maxGanHistory} kỳ).\n• Cặp **${topGan2[1]?.number}** — đã **${topGan2[1]?.daysUnopened} kỳ** chưa về (gan cực đại lịch sử: ${topGan2[1]?.maxGanHistory} kỳ).\n\n*Gợi ý*: Hai cặp này đang sát ngưỡng gan, bạn có thể theo dõi thêm ở tab **Biểu đồ chuyên sâu** hoặc chọn mua thử vé đuôi **${topGan2[0]?.number}** tại mục Mua Vé Online.`;
     }
 
     if (q.includes('đầu đuôi') || q.includes('cầu loto') || q.includes('hcm')) {
-      return `**Phân tích cầu Loto & Tần suất đài ${prov.name} hôm nay**:\n• Top cặp về nhiều nhất gần đây: **${topHot3.map((h) => `${h.number} (${h.count} lần)`).join(', ')}**.\n• Đầu số đang chạy đều: **Đầu ${topHot3[0]?.number[0]}** và **Đầu ${topHot3[1]?.number[0]}**.\n• Cặp song thủ tham khảo hôm nay: **${topHot3[0]?.number} - ${topGan2[0]?.number}**.\n\n*Lưu ý*: Dữ liệu phân tích mang tính thống kê tham khảo, chúc bạn gặp nhiều may mắn!`;
+      return `**Phân tích cầu Loto & Tần suất đài ${prov.name} hôm nay**:\n• Top cặp về nhiều nhất 30 kỳ gần đây: **${topHot3.map((h) => `${h.number} (${h.count} lần)`).join(', ')}**.\n• Đầu số đang chạy đều: **Đầu ${topHot3[0]?.number[0]}** và **Đầu ${topHot3[1]?.number[0]}**.\n• Cặp song thủ tham khảo hôm nay: **${topHot3[0]?.number} - ${topGan2[0]?.number}**.\n\n*Lưu ý*: Dữ liệu phân tích mang tính thống kê tham khảo, chúc bạn gặp nhiều may mắn!`;
     }
 
-    return `**Gợi ý con số tham khảo đài ${prov.name} hôm nay**:\n• **Bạch thủ sáng giá (Tần suất cao)**: **${topHot3[0]?.number}** (về ${topHot3[0]?.count} lần trong các kỳ gần đây).\n• **Cặp số hồi gan đáng chú ý**: **${topGan2[0]?.number}** (${topGan2[0]?.daysUnopened} ngày chưa ra) & **${topGan2[1]?.number}** (${topGan2[1]?.daysUnopened} ngày).\n• **Đuôi đẹp kết hợp phong thủy**: **${selectedElement.mainDigits[0]} - ${selectedElement.mainDigits[1]}**.\n\nBạn có thể nhấn **Mua Vé Số Online** để tìm tờ vé thật có đuôi **${topHot3[0]?.number}** ngay bây giờ!`;
+    return `**Gợi ý con số tham khảo đài ${prov.name} hôm nay**:\n• **Bạch thủ sáng giá (Tần suất cao)**: **${topHot3[0]?.number}** (về ${topHot3[0]?.count} lần trong 30 kỳ gần đây).\n• **Cặp số hồi gan đáng chú ý**: **${topGan2[0]?.number}** (${topGan2[0]?.daysUnopened} kỳ chưa ra) & **${topGan2[1]?.number}** (${topGan2[1]?.daysUnopened} kỳ).\n• **Đuôi đẹp kết hợp phong thủy**: **${selectedElement.mainDigits[0]} - ${selectedElement.mainDigits[1]}**.\n\nBạn có thể nhấn **Mua Vé Số Online** để tìm tờ vé thật có đuôi **${topHot3[0]?.number}** ngay bây giờ!`;
   };
 
-  const handleSendAiMessage = (textToSend?: string) => {
+  const handleSendAiMessage = async (textToSend?: string) => {
     const content = (textToSend ?? chatInput).trim();
     if (!content) return;
     if (activeTier !== 'vip') {
@@ -332,15 +384,9 @@ export default function UserDashboardPage() {
       content,
       timestamp: nowTime,
     };
-    const botMsg: ChatMessage = {
-      id: `a-${Date.now() + 1}`,
-      role: 'assistant',
-      content: generateAiReply(content),
-      timestamp: nowTime,
-    };
 
     const nextCount = usedMessagesToday + 1;
-    setMessages((prev) => [...prev, userMsg, botMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     setUsedMessagesToday(nextCount);
     setChatInput('');
 
@@ -350,6 +396,15 @@ export default function UserDashboardPage() {
     } catch {
       // ignore
     }
+
+    const replyText = await generateAiReplyAsync(content);
+    const botMsg: ChatMessage = {
+      id: `a-${Date.now() + 1}`,
+      role: 'assistant',
+      content: replyText,
+      timestamp: nowTime,
+    };
+    setMessages((prev) => [...prev, botMsg]);
   };
 
   const filteredHistory = PURCHASE_HISTORY.filter((t) => {

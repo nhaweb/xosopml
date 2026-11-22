@@ -9,7 +9,12 @@ export const siteConfig = {
     'Kết quả chỉ mang tính chất tham khảo. Người chơi cần đối chiếu với bảng kết quả chính thức do Công ty Xổ Số Kiến Thiết phát hành khi lĩnh thưởng.',
   schedule:
     'Miền Nam 16h15 · Miền Trung 17h15 · Miền Bắc 18h15 · Vietlott, Keno theo từng kỳ',
+  facebookUrl: 'https://www.facebook.com/pmlvietnam.vn',
+  tiktokUrl: 'https://www.tiktok.com/@pmlvietnam.vn',
   youtubeUrl: 'https://www.youtube.com/@xosominhluan',
-  hotline: '0973 777 779',
+  zaloUrl: 'https://zalo.me/0789780167',
+  hotline: '0789 780 167',
+  hotlineTel: 'tel:0789780167',
+  address: '208 Trường Chinh, Tân Bình, Hồ Chí Minh, Vietnam',
   email: 'support@xosominhluan.vn',
 };

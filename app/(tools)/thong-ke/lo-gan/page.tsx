@@ -1,11 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { TriangleAlert, TrendingUp } from 'lucide-react';
 import { PROVINCES } from '@/config/lottery-provinces';
+import { ApiDataSourceBanner } from '@/components/lottery/lottery-board-skeleton';
 import { SiteFrame } from '@/components/site/site-frame';
 import { formatIsoDate } from '@/lib/lottery-date';
 import { calculateLoGan, countHotGan } from '@/lib/stats-calculator';
+import { LoGanItem } from '@/types/lottery';
 
 const GAN_THRESHOLD = 15;
 
@@ -17,8 +19,44 @@ const regionLabel: Record<string, string> = {
 
 export default function LoGanPage() {
   const [provinceId, setProvinceId] = useState('ha-noi');
+  const [items, setItems] = useState<LoGanItem[]>(() => calculateLoGan('ha-noi'));
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [apiMeta, setApiMeta] = useState<{
+    source: 'xosoapi.online' | 'fallback';
+    warning?: string;
+    isLiveWindow?: boolean;
+    revalidateSeconds?: number;
+  }>({ source: 'xosoapi.online', revalidateSeconds: 3600 });
 
-  const items = useMemo(() => calculateLoGan(provinceId), [provinceId]);
+  const loadLoGan = useCallback(async (provId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/xoso/stats?type=lo-gan&province=${encodeURIComponent(provId)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json?.data)) {
+          setItems(json.data);
+          setApiMeta({
+            source: json.source || 'fallback',
+            warning: json.warning,
+            isLiveWindow: json.isLiveWindow,
+            revalidateSeconds: json.revalidateSeconds,
+          });
+          return;
+        }
+      }
+      setItems(calculateLoGan(provId));
+    } catch {
+      setItems(calculateLoGan(provId));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLoGan(provinceId);
+  }, [provinceId, loadLoGan]);
+
   const hotCount = countHotGan(items, GAN_THRESHOLD);
   const province = PROVINCES.find((item) => item.id === provinceId);
 
@@ -26,11 +64,11 @@ export default function LoGanPage() {
     <SiteFrame>
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-red-600 uppercase dark:text-red-400">
+          <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-red-600 uppercase dark:text-red-400">
             <TrendingUp className="size-4" />
             Thống kê lô gan
           </div>
-          <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl">Lô gan lâu chưa về</h1>
+          <h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-4xl">Lô gan lâu chưa về</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             100 cặp số từ 00 đến 99, xếp theo số ngày chưa xuất hiện ở 2 số cuối. Số gan trên {GAN_THRESHOLD} ngày được tô đỏ.
           </p>
@@ -52,14 +90,25 @@ export default function LoGanPage() {
         </label>
       </div>
 
+      <ApiDataSourceBanner
+        source={apiMeta.source}
+        warning={apiMeta.warning}
+        isLiveWindow={apiMeta.isLiveWindow}
+        revalidateSeconds={apiMeta.revalidateSeconds}
+        isLoading={isLoading}
+        onRefresh={() => loadLoGan(provinceId)}
+      />
+
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <article className="rounded-2xl border bg-card p-4 shadow-sm">
           <p className="text-xs font-bold text-muted-foreground uppercase">Đài đang xem</p>
-          <p className="mt-1 text-lg font-black">{province?.name}</p>
+          <p className="mt-1 text-lg font-extrabold">{province?.name}</p>
         </article>
         <article className="rounded-2xl border bg-card p-4 shadow-sm">
           <p className="text-xs font-bold text-muted-foreground uppercase">Gan lâu nhất</p>
-          <p className="mt-1 text-lg font-black tabular-nums">{items[0]?.number ?? '—'} · {items[0]?.daysUnopened ?? 0} ngày</p>
+          <p className="mt-1 text-lg font-extrabold tabular-nums">
+            {items[0]?.number ?? '—'} · {items[0]?.daysUnopened ?? 0} ngày
+          </p>
         </article>
         <article className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-500/10 p-4 shadow-sm">
           <p className="flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400 uppercase">
@@ -74,7 +123,7 @@ export default function LoGanPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] border-collapse text-sm">
             <thead>
-              <tr className="border-b bg-muted/50 text-left text-xs tracking-wider text-muted-foreground uppercase">
+              <tr className="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase">
                 <th className="px-4 py-3 font-bold">Hạng</th>
                 <th className="px-4 py-3 font-bold">Số</th>
                 <th className="px-4 py-3 font-bold">Ngày chưa về</th>
@@ -83,21 +132,40 @@ export default function LoGanPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {items.map((item, index) => {
-                const hot = item.daysUnopened > GAN_THRESHOLD;
-                return (
-                  <tr key={item.number} className={hot ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'hover:bg-muted/30'}>
-                    <td className="px-4 py-2.5 font-semibold tabular-nums">{index + 1}</td>
-                    <td className="px-4 py-2.5 text-base font-black tabular-nums">{item.number}</td>
-                    <td className="px-4 py-2.5 font-bold tabular-nums">
-                      {item.daysUnopened} ngày
-                      {hot ? <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">Gan nóng</span> : null}
-                    </td>
-                    <td className="px-4 py-2.5 tabular-nums">{item.lastDate ? formatIsoDate(item.lastDate) : 'Chưa về trong kỳ'}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{item.maxGanHistory} ngày</td>
-                  </tr>
-                );
-              })}
+              {isLoading
+                ? Array.from({ length: 12 }, (_, idx) => (
+                    <tr key={idx} className="animate-pulse">
+                      <td className="px-4 py-3"><div className="h-4 w-8 rounded bg-muted" /></td>
+                      <td className="px-4 py-3"><div className="h-5 w-10 rounded bg-muted" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-24 rounded bg-muted" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-24 rounded bg-muted" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-16 rounded bg-muted" /></td>
+                    </tr>
+                  ))
+                : items.map((item, index) => {
+                    const hot = item.daysUnopened > GAN_THRESHOLD;
+                    return (
+                      <tr
+                        key={item.number}
+                        className={hot ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'hover:bg-muted/30'}
+                      >
+                        <td className="px-4 py-2.5 font-semibold tabular-nums">{index + 1}</td>
+                        <td className="px-4 py-2.5 font-mono text-base font-extrabold tabular-nums">{item.number}</td>
+                        <td className="px-4 py-2.5 font-bold tabular-nums">
+                          {item.daysUnopened} ngày
+                          {hot ? (
+                            <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                              Gan nóng
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-2.5 tabular-nums">
+                          {item.lastDate ? formatIsoDate(item.lastDate) : 'Theo dõi trực tiếp'}
+                        </td>
+                        <td className="px-4 py-2.5 tabular-nums">{item.maxGanHistory} ngày</td>
+                      </tr>
+                    );
+                  })}
             </tbody>
           </table>
         </div>

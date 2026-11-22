@@ -14,11 +14,12 @@ import {
 import { PROVINCES } from '@/config/lottery-provinces';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
 import { QuickTicketCheckerBar } from '@/components/lottery/quick-ticket-checker-bar';
+import { ApiDataSourceBanner } from '@/components/lottery/lottery-board-skeleton';
 import { SiteFrame } from '@/components/site/site-frame';
-import { getLotteryResults } from '@/lib/mock-lottery-data';
-import { formatDate, shortDate } from '@/lib/format';
+import { fetchProvinceDrawHistory } from '@/lib/services/xosoApi';
+import { formatDate } from '@/lib/format';
 import { toRouteDate } from '@/lib/lottery-date';
-import { ProvinceDrawResult, Region } from '@/types/lottery';
+import { Region } from '@/types/lottery';
 
 const WEEKDAY_LABELS = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
@@ -44,27 +45,6 @@ type PageProps = {
   params: Promise<{ region: string; province: string }>;
 };
 
-function recentDraws(provinceId: string, region: Region, limit: number) {
-  const province = PROVINCES.find((item) => item.id === provinceId);
-  if (!province) return [];
-
-  const draws: { date: Date; result: ProvinceDrawResult }[] = [];
-  const cursor = new Date();
-  cursor.setHours(12, 0, 0, 0);
-
-  for (let offset = 0; offset < 180 && draws.length < limit; offset += 1) {
-    const date = new Date(cursor);
-    date.setDate(cursor.getDate() - offset);
-    if (!province.drawDays.includes(date.getDay())) continue;
-
-    const day = getLotteryResults(date);
-    const result = day[region].find((item) => item.provinceId === provinceId);
-    if (result) draws.push({ date, result });
-  }
-
-  return draws;
-}
-
 export default async function ProvincePage({ params }: PageProps) {
   const { region: rawRegion, province: rawProvince } = await params;
   const cleanRegionSlug = rawRegion.replace(/\.html$/, '');
@@ -77,8 +57,12 @@ export default async function ProvincePage({ params }: PageProps) {
     notFound();
   }
 
-  // Lấy lịch sử 6 kỳ gần nhất của đài này
-  const history = recentDraws(province.id, province.region, 6);
+  // Lấy lịch sử 6 kỳ gần nhất của đài này từ hệ thống xosoapi.online (kèm fallback an toàn)
+  const historyEnvelope = await fetchProvinceDrawHistory(province.id, 6);
+  const history = historyEnvelope.data.map((item) => ({
+    date: new Date(item.date),
+    result: item.result,
+  }));
   const latestDraw = history[0];
 
   const drawDayNames = province.drawDays.map((d) => WEEKDAY_LABELS[d]).join(', ');
@@ -154,6 +138,14 @@ export default async function ProvincePage({ params }: PageProps) {
           </div>
         )}
       </div>
+
+      {/* Trạng thái dữ liệu xosoapi.online */}
+      <ApiDataSourceBanner
+        source={historyEnvelope.source}
+        warning={historyEnvelope.warning}
+        isLiveWindow={historyEnvelope.isLiveWindow}
+        revalidateSeconds={historyEnvelope.revalidateSeconds}
+      />
 
       {/* Quick Ticket Checker Bar for this Province */}
       {latestDraw && (

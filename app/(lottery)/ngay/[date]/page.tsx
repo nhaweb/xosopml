@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CalendarDays } from 'lucide-react';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
+import { ApiDataSourceBanner } from '@/components/lottery/lottery-board-skeleton';
 import { SiteFrame } from '@/components/site/site-frame';
-import { getLotteryResults } from '@/lib/mock-lottery-data';
+import { fetchLotteryResultsByDate } from '@/lib/services/xosoApi';
 import { parseLotteryDate, toRouteDate } from '@/lib/lottery-date';
 
 type PageProps = {
@@ -15,7 +16,8 @@ export default async function LotteryByDatePage({ params }: PageProps) {
   const date = parseLotteryDate(rawDate);
   if (!date) notFound();
 
-  const data = getLotteryResults(date);
+  const envelope = await fetchLotteryResultsByDate(date);
+  const data = envelope.data;
   const routeDate = toRouteDate(date);
   const previous = new Date(date);
   previous.setDate(date.getDate() - 1);
@@ -32,22 +34,37 @@ export default async function LotteryByDatePage({ params }: PageProps) {
     <SiteFrame>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-red-600 uppercase dark:text-red-400">
+          <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-red-600 uppercase dark:text-red-400">
             <CalendarDays className="size-4" />
             Tra cứu theo ngày
           </div>
-          <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl">Kết quả {data.formattedDate}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Đường dẫn {routeDate}</p>
+          <h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-4xl">
+            Kết quả {data.formattedDate}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Mã ngày: {routeDate}</p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/ngay/${toRouteDate(previous)}`} className="rounded-lg border bg-card px-3 py-2 text-sm font-bold hover:bg-muted">
+          <Link
+            href={`/ngay/${toRouteDate(previous)}`}
+            className="rounded-lg border bg-card px-3 py-2 text-sm font-bold hover:bg-muted"
+          >
             Ngày trước
           </Link>
-          <Link href={`/ngay/${toRouteDate(next)}`} className="rounded-lg border bg-card px-3 py-2 text-sm font-bold hover:bg-muted">
+          <Link
+            href={`/ngay/${toRouteDate(next)}`}
+            className="rounded-lg border bg-card px-3 py-2 text-sm font-bold hover:bg-muted"
+          >
             Ngày sau
           </Link>
         </div>
       </div>
+
+      <ApiDataSourceBanner
+        source={envelope.source}
+        warning={envelope.warning}
+        isLiveWindow={envelope.isLiveWindow}
+        revalidateSeconds={envelope.revalidateSeconds}
+      />
 
       <div className="space-y-8">
         {boards.map((board) =>
@@ -65,7 +82,7 @@ export default async function LotteryByDatePage({ params }: PageProps) {
             <p key={board.id} className="rounded-2xl border bg-card px-4 py-6 text-sm text-muted-foreground">
               {board.title} không có đài mở thưởng trong ngày này.
             </p>
-          ),
+          )
         )}
       </div>
     </SiteFrame>

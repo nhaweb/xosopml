@@ -110,10 +110,10 @@ export function SiteFooter() {
             <h3 className="mb-4 text-sm font-black uppercase tracking-wider text-white">
               KẾT NỐI
             </h3>
-            <div className="mb-4 flex items-center gap-3">
+            <div className="mb-4 flex items-center gap-2.5">
               {/* Facebook */}
               <a
-                href="https://www.facebook.com"
+                href={siteConfig.facebookUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Facebook Xổ Số Minh Luân"
@@ -124,9 +124,22 @@ export function SiteFooter() {
                 </svg>
               </a>
 
+              {/* TikTok */}
+              <a
+                href={siteConfig.tiktokUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="TikTok Xổ Số Minh Luân"
+                className="grid size-10 place-items-center rounded-xl bg-white/10 text-white transition-all hover:scale-105 hover:bg-black hover:ring-1 hover:ring-[#25F4EE]"
+              >
+                <svg className="size-5 fill-current" viewBox="0 0 24 24">
+                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                </svg>
+              </a>
+
               {/* Zalo */}
               <a
-                href="https://zalo.me"
+                href={siteConfig.zaloUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Zalo Xổ Số Minh Luân"
@@ -152,7 +165,16 @@ export function SiteFooter() {
             <div className="space-y-1.5 text-xs text-slate-300">
               <p>
                 <span className="text-slate-400">Hotline:</span>{' '}
-                <strong className="font-mono text-amber-400">{siteConfig.hotline}</strong>
+                <a
+                  href={siteConfig.hotlineTel}
+                  className="font-mono font-bold text-amber-400 hover:underline"
+                >
+                  {siteConfig.hotline}
+                </a>
+              </p>
+              <p className="leading-relaxed">
+                <span className="text-slate-400">Địa chỉ:</span>{' '}
+                <span>{siteConfig.address}</span>
               </p>
               <p>
                 <span className="text-slate-400">Email:</span>{' '}
@@ -176,11 +198,10 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-8 border-t border-slate-800/80 pt-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400">
-          <p>© 2026 {siteConfig.name} — Chuyên trang Kết quả Xổ số Kiến thiết 3 Miền.</p>
+          <p>© 2026 {siteConfig.name} — {siteConfig.address}</p>
           <p>{siteConfig.schedule}</p>
         </div>
       </div>
     </footer>
   );
 }
-
