@@ -15,8 +15,8 @@ export function AiLotoSummaryWidget() {
           </span>
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-md bg-red-600 text-white px-2 py-0.5 text-[10px] font-black uppercase tracking-wider">
-                PML AI INTELLIGENCE
+              <span className="rounded-md bg-[#b80c0c] text-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide">
+                MINH LUÂN AI
               </span>
               <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                 <Sparkles className="size-3.5" /> Tự động tổng hợp

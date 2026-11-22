@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   CheckCircle2,
   XCircle,
@@ -31,7 +31,7 @@ interface MinhLuanHeaderProps {
 
 const mainNavLinks = [
   { label: 'MINH LUÂN', href: '/' },
-  { label: 'TRỰC TIẾP', href: '#kqxs-hom-nay' },
+  { label: 'TRỰC TIẾP', href: '/#kqxs-hom-nay' },
   { label: 'SỔ KẾT QUẢ', href: '/thong-ke/giai-dac-biet' },
   { label: 'SỚ ĐẦU ĐUÔI', href: '/so-dau-duoi' },
   { label: 'THỐNG KÊ', href: '/thong-ke/tan-suat' },
@@ -54,6 +54,7 @@ export function MinhLuanHeader({
   onOpenCheckerModal,
 }: MinhLuanHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Form Đăng nhập nhanh trên top bar (#1)
@@ -92,13 +93,13 @@ export function MinhLuanHeader({
               Xổ Số Minh Luân™
             </Link>
             <span className="text-muted-foreground">»</span>
-            <a href="#xsmn" className="hover:text-red-600 hover:underline">
+            <Link href="/#xsmn" className="hover:text-red-600 hover:underline">
               XSMN
-            </a>
+            </Link>
             <span className="text-muted-foreground">»</span>
-            <a href="#kqxs-hom-nay" className="hover:text-red-600 hover:underline">
+            <Link href="/#kqxs-hom-nay" className="hover:text-red-600 hover:underline">
               Kết quả xổ số trực tiếp
-            </a>
+            </Link>
             <span className="hidden sm:inline text-muted-foreground">»</span>
             <Link href="/mua-ve-online" className="hidden sm:inline hover:text-red-600 hover:underline">
               Mua Vé Số Online
@@ -133,7 +134,7 @@ export function MinhLuanHeader({
             </label>
             <button
               type="submit"
-              className="rounded bg-sky-500 px-2.5 py-0.5 font-bold text-white hover:bg-sky-600 transition-colors"
+              className="rounded-md bg-[#0f2454] px-2.5 py-0.5 font-bold text-white hover:bg-[#1a3673] transition-colors"
             >
               Login
             </button>
@@ -176,10 +177,10 @@ export function MinhLuanHeader({
 
           {/* Center: CHUYÊN TRANG KẾT QUẢ XỔ SỐ KIẾN THIẾT — MINH LUÂN + Region Tabs */}
           <div className="flex flex-col items-center justify-center text-center lg:col-span-4">
-            <div className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wide text-foreground/85">
+            <div className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wide text-foreground/80">
               CHUYÊN TRANG KẾT QUẢ XỔ SỐ KIẾN THIẾT
             </div>
-            <div className="mt-0.5 font-serif text-2xl sm:text-3xl font-black tracking-wider text-[#b31217] dark:text-red-500 drop-shadow-2xs">
+            <div className="mt-0.5 text-2xl sm:text-3xl font-extrabold uppercase tracking-wide text-[#a80808] dark:text-red-400">
               MINH LUÂN
             </div>
 
@@ -257,7 +258,7 @@ export function MinhLuanHeader({
                   />
                   <button
                     type="submit"
-                    className="shrink-0 rounded-full bg-gradient-to-b from-sky-400 to-blue-600 px-3 py-1 text-[11px] font-black text-white shadow-xs hover:from-sky-500 hover:to-blue-700 transition-all"
+                    className="shrink-0 rounded-full bg-gradient-to-b from-[#c81010] to-[#990000] px-3.5 py-1 text-[11px] font-extrabold text-white shadow-xs hover:from-[#dc1414] hover:to-[#b30000] transition-all"
                   >
                     Dò Kết Quả
                   </button>
@@ -298,17 +299,27 @@ export function MinhLuanHeader({
       <div className="bg-gradient-to-b from-[#d31a1a] via-[#a80808] to-[#7c0000] text-white shadow-sm">
         <div className="mx-auto flex max-w-[1260px] items-center justify-between px-3 lg:px-4">
           <nav className="hidden flex-wrap items-center divide-x divide-white/15 lg:flex" aria-label="Menu chính">
-            {mainNavLinks.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={`px-3 py-2.5 text-[11px] font-black uppercase tracking-wide transition-colors hover:bg-black/20 ${
-                  item.highlight ? 'text-amber-300' : 'text-white'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {mainNavLinks.map((item) => {
+              const isCurrent =
+                item.href === '/'
+                  ? pathname === '/'
+                  : !item.href.startsWith('/#') && pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={`px-3 py-2.5 text-[11px] font-black uppercase tracking-wide transition-colors hover:bg-black/20 ${
+                    isCurrent
+                      ? 'bg-black/30 text-amber-300 underline decoration-amber-300 underline-offset-4'
+                      : item.highlight
+                      ? 'text-amber-300'
+                      : 'text-white'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="flex w-full items-center justify-between py-1.5 lg:w-auto lg:justify-end lg:gap-1.5">

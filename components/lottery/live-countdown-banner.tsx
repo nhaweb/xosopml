@@ -70,13 +70,13 @@ export function LiveCountdownBanner() {
 
   return (
     <div
-      className={`relative mb-6 overflow-hidden rounded-2xl border transition-all ${
+      className={`relative mb-6 overflow-hidden rounded-xl border p-3.5 sm:p-4 transition-all ${
         isLive
-          ? 'border-red-500 bg-gradient-to-r from-red-600 to-rose-700 text-white shadow-lg animate-pulse'
-          : 'border-border bg-card p-3.5 sm:p-4 text-foreground shadow-xs'
+          ? 'border-red-500 bg-gradient-to-r from-[#b80c0c] to-[#8f0000] text-white shadow-md'
+          : 'border-border bg-card text-foreground shadow-xs'
       }`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-1">
         {/* Status Label */}
         <div className="flex items-center gap-3">
           <span
@@ -84,12 +84,13 @@ export function LiveCountdownBanner() {
               isLive ? 'bg-white text-red-600' : 'bg-red-500/10 text-red-600 dark:text-red-400'
             }`}
           >
-            {isLive ? <Radio className="size-5 animate-spin-slow" /> : <Clock className="size-5" />}
+            {isLive ? <Radio className="size-5 animate-pulse" /> : <Clock className="size-5" />}
           </span>
           <div>
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-black uppercase tracking-wider ${isLive ? 'text-amber-200' : 'text-red-600 dark:text-red-400'}`}>
-                {isLive ? '🔴 TRỰC TIẾP' : 'HỆ THỐNG TRỰC TIẾP MINH NGỌC'}
+              {isLive && <span className="inline-block size-2 rounded-full bg-amber-300 animate-ping" />}
+              <span className={`text-xs font-extrabold uppercase tracking-wide ${isLive ? 'text-amber-200' : 'text-red-600 dark:text-red-400'}`}>
+                {isLive ? 'ĐANG TRỰC TIẾP' : 'HỆ THỐNG TRỰC TIẾP MINH LUÂN'}
               </span>
               <span className="text-[11px] opacity-75">· {now.toLocaleTimeString('vi-VN')}</span>
             </div>

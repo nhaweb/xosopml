@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Sparkles,
   Ticket,
-  TrendingUp,
   Bot,
   Heart,
   Plus,
@@ -23,8 +22,39 @@ import {
   Truck,
   ArrowRight,
   MessageSquare,
+  Snowflake,
+  Flame,
+  Trophy,
+  Clock,
 } from 'lucide-react';
 import { SiteFrame } from '@/components/site/site-frame';
+
+function formatRichMessage(text: string): React.ReactNode {
+  return text.split('\n').map((line, lineIdx) => {
+    const tokens = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+    return (
+      <span key={lineIdx} className="block">
+        {tokens.map((token, tIdx) => {
+          if (token.startsWith('**') && token.endsWith('**')) {
+            return (
+              <strong key={tIdx} className="font-extrabold text-foreground">
+                {token.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (token.startsWith('*') && token.endsWith('*')) {
+            return (
+              <em key={tIdx} className="italic opacity-90">
+                {token.slice(1, -1)}
+              </em>
+            );
+          }
+          return <React.Fragment key={tIdx}>{token}</React.Fragment>;
+        })}
+      </span>
+    );
+  });
+}
 import { PROVINCES } from '@/config/lottery-provinces';
 import { calculateLoGan } from '@/lib/stats-calculator';
 import { getLotteryResults } from '@/lib/mock-lottery-data';
@@ -276,14 +306,14 @@ export default function UserDashboardPage() {
     const topHot3 = freqList.slice(0, 3);
 
     if (q.includes('lâu ra') || q.includes('gan') || q.includes('10 ngày')) {
-      return `📊 **Thống kê 2 cặp số lâu ra nhất đài ${prov.name}**:\n• Cặp **${topGan2[0]?.number}** — đã **${topGan2[0]?.daysUnopened} ngày** chưa về (gan cực đại lịch sử: ${topGan2[0]?.maxGanHistory} ngày).\n• Cặp **${topGan2[1]?.number}** — đã **${topGan2[1]?.daysUnopened} ngày** chưa về (gan cực đại lịch sử: ${topGan2[1]?.maxGanHistory} ngày).\n\n💡 *Gợi ý*: Hai cặp này đang sát ngưỡng gan, bạn có thể theo dõi thêm ở tab **Biểu đồ chuyên sâu** hoặc chọn mua thử vé đuôi **${topGan2[0]?.number}** tại mục Mua Vé Online.`;
+      return `**Thống kê 2 cặp số lâu ra nhất đài ${prov.name}**:\n• Cặp **${topGan2[0]?.number}** — đã **${topGan2[0]?.daysUnopened} ngày** chưa về (gan cực đại lịch sử: ${topGan2[0]?.maxGanHistory} ngày).\n• Cặp **${topGan2[1]?.number}** — đã **${topGan2[1]?.daysUnopened} ngày** chưa về (gan cực đại lịch sử: ${topGan2[1]?.maxGanHistory} ngày).\n\n*Gợi ý*: Hai cặp này đang sát ngưỡng gan, bạn có thể theo dõi thêm ở tab **Biểu đồ chuyên sâu** hoặc chọn mua thử vé đuôi **${topGan2[0]?.number}** tại mục Mua Vé Online.`;
     }
 
     if (q.includes('đầu đuôi') || q.includes('cầu loto') || q.includes('hcm')) {
-      return `🔥 **Phân tích cầu Loto & Tần suất đài ${prov.name} hôm nay**:\n• Top cặp về nhiều nhất gần đây: **${topHot3.map((h) => `${h.number} (${h.count} lần)`).join(', ')}**.\n• Đầu số đang chạy đều: **Đầu ${topHot3[0]?.number[0]}** và **Đầu ${topHot3[1]?.number[0]}**.\n• Cặp song thủ tham khảo hôm nay: **${topHot3[0]?.number} - ${topGan2[0]?.number}**.\n\n⚠️ *Lưu ý*: Dữ liệu phân tích mang tính thống kê tham khảo, chúc bạn gặp nhiều may mắn!`;
+      return `**Phân tích cầu Loto & Tần suất đài ${prov.name} hôm nay**:\n• Top cặp về nhiều nhất gần đây: **${topHot3.map((h) => `${h.number} (${h.count} lần)`).join(', ')}**.\n• Đầu số đang chạy đều: **Đầu ${topHot3[0]?.number[0]}** và **Đầu ${topHot3[1]?.number[0]}**.\n• Cặp song thủ tham khảo hôm nay: **${topHot3[0]?.number} - ${topGan2[0]?.number}**.\n\n*Lưu ý*: Dữ liệu phân tích mang tính thống kê tham khảo, chúc bạn gặp nhiều may mắn!`;
     }
 
-    return `🎯 **Gợi ý con số tham khảo đài ${prov.name} hôm nay**:\n• **Bạch thủ sáng giá (Tần suất cao)**: **${topHot3[0]?.number}** (về ${topHot3[0]?.count} lần trong các kỳ gần đây).\n• **Cặp số hồi gan đáng chú ý**: **${topGan2[0]?.number}** (${topGan2[0]?.daysUnopened} ngày chưa ra) & **${topGan2[1]?.number}** (${topGan2[1]?.daysUnopened} ngày).\n• **Đuôi đẹp kết hợp phong thủy**: **${selectedElement.mainDigits[0]} - ${selectedElement.mainDigits[1]}**.\n\nBạn có thể nhấn **Mua Vé Số Online** để tìm tờ vé thật có đuôi **${topHot3[0]?.number}** ngay bây giờ!`;
+    return `**Gợi ý con số tham khảo đài ${prov.name} hôm nay**:\n• **Bạch thủ sáng giá (Tần suất cao)**: **${topHot3[0]?.number}** (về ${topHot3[0]?.count} lần trong các kỳ gần đây).\n• **Cặp số hồi gan đáng chú ý**: **${topGan2[0]?.number}** (${topGan2[0]?.daysUnopened} ngày chưa ra) & **${topGan2[1]?.number}** (${topGan2[1]?.daysUnopened} ngày).\n• **Đuôi đẹp kết hợp phong thủy**: **${selectedElement.mainDigits[0]} - ${selectedElement.mainDigits[1]}**.\n\nBạn có thể nhấn **Mua Vé Số Online** để tìm tờ vé thật có đuôi **${topHot3[0]?.number}** ngay bây giờ!`;
   };
 
   const handleSendAiMessage = (textToSend?: string) => {
@@ -331,9 +361,9 @@ export default function UserDashboardPage() {
 
   return (
     <SiteFrame>
-      <div className="mx-auto max-w-[1260px] px-4 py-6 lg:px-6">
+      <div>
         {/* Header User Profile & Tier Switcher */}
-        <div className="mb-6 rounded-3xl border bg-card p-5 sm:p-6 shadow-sm">
+        <div className="mb-6 rounded-2xl border bg-card p-5 sm:p-6 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-4">
               <div className="relative">
@@ -354,12 +384,12 @@ export default function UserDashboardPage() {
 
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-black text-foreground">
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">
                     Thành viên Minh Luân
                   </h1>
                   {activeTier === 'vip' ? (
-                    <span className="rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-3 py-0.5 text-[10px] font-black uppercase text-white shadow-xs">
-                      👑 THÀNH VIÊN TRẢ PHÍ THÁNG (VIP)
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#b80c0c] to-amber-500 px-3 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white shadow-xs">
+                      <Crown className="size-3" /> THÀNH VIÊN TRẢ PHÍ THÁNG (VIP)
                     </span>
                   ) : (
                     <span className="rounded-full bg-muted px-3 py-0.5 text-[10px] font-bold text-muted-foreground uppercase">
@@ -444,8 +474,14 @@ export default function UserDashboardPage() {
                 <span>Số Phong Thủy Hôm Nay</span>
                 <Compass className="size-4 text-amber-500" />
               </div>
-              <div className="mt-1.5 font-mono text-xl font-black text-red-600 dark:text-amber-400">
-                {activeTier === 'vip' ? selectedElement.mainDigits.join(' · ') : '🔒 Dành cho VIP'}
+              <div className="mt-1.5 font-mono text-xl font-extrabold text-red-600 dark:text-amber-400">
+                {activeTier === 'vip' ? (
+                  selectedElement.mainDigits.join(' · ')
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-sm font-sans font-bold text-muted-foreground">
+                    <Lock className="size-4" /> Dành cho VIP
+                  </span>
+                )}
               </div>
             </div>
 
@@ -454,8 +490,14 @@ export default function UserDashboardPage() {
                 <span>Trợ Lý Ảo Xổ Số AI</span>
                 <Bot className="size-4 text-blue-500" />
               </div>
-              <div className="mt-1.5 text-xl font-black text-foreground">
-                {activeTier === 'vip' ? `${remainingAiMsgs} / 10 tin hôm nay` : '🔒 Nâng cấp VIP'}
+              <div className="mt-1.5 text-xl font-extrabold text-foreground">
+                {activeTier === 'vip' ? (
+                  `${remainingAiMsgs} / 10 tin hôm nay`
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-sm font-bold text-muted-foreground">
+                    <Lock className="size-4" /> Nâng cấp VIP
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -514,16 +556,16 @@ export default function UserDashboardPage() {
               <div className="flex items-center gap-2">
                 {[
                   { id: 'all', label: 'Tất cả vé' },
-                  { id: 'won', label: '🎉 Trúng thưởng' },
-                  { id: 'waiting', label: '⏳ Chờ xổ' },
+                  { id: 'won', label: 'Trúng thưởng' },
+                  { id: 'waiting', label: 'Chờ xổ' },
                 ].map((f) => (
                   <button
                     key={f.id}
                     type="button"
                     onClick={() => setHistoryFilter(f.id as any)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
                       historyFilter === f.id
-                        ? 'bg-red-600 text-white'
+                        ? 'bg-[#b80c0c] text-white shadow-xs'
                         : 'border bg-card text-muted-foreground hover:bg-muted'
                     }`}
                   >
@@ -543,12 +585,12 @@ export default function UserDashboardPage() {
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-xs font-bold text-muted-foreground">{t.id}</span>
                       {t.status === 'won' ? (
-                        <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 dark:text-emerald-300">
-                          🎉 TRÚNG THƯỞNG
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                          <Trophy className="size-3" /> TRÚNG THƯỞNG
                         </span>
                       ) : t.status === 'waiting' ? (
-                        <span className="rounded-full bg-amber-100 dark:bg-amber-950/60 px-2.5 py-0.5 text-[10px] font-black text-amber-700 dark:text-amber-300">
-                          ⏳ Chờ mở thưởng
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/60 px-2.5 py-0.5 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">
+                          <Clock className="size-3" /> Chờ mở thưởng
                         </span>
                       ) : (
                         <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
@@ -912,40 +954,42 @@ export default function UserDashboardPage() {
                 <div className="rounded-2xl border bg-card p-5 shadow-xs">
                   <div className="mb-4 flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-black text-foreground">
-                        ❄️ Biểu Đồ Số Lâu Ra Nhất (Lô Gan)
+                      <h3 className="flex items-center gap-1.5 text-sm font-extrabold text-foreground">
+                        <Snowflake className="size-4 text-sky-600 dark:text-sky-400" />
+                        Biểu Đồ Số Lâu Ra Nhất (Lô Gan)
                       </h3>
                       <p className="text-[11px] text-muted-foreground">
                         Số ngày chưa xuất hiện (Top 10 cặp số gan lâu nhất)
                       </p>
                     </div>
-                    <span className="rounded-full bg-red-100 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-black text-red-600 dark:text-red-400">
+                    <span className="rounded-full bg-red-100 dark:bg-red-950/60 px-2.5 py-0.5 text-[10px] font-extrabold text-red-600 dark:text-red-400">
                       Đơn vị: Ngày
                     </span>
                   </div>
 
                   <div className="space-y-2.5">
                     {chartLoGan.map((item, idx) => {
-                      const pct = Math.max(12, Math.round((item.daysUnopened / maxGanVal) * 100));
+                      const pct = Math.max(10, Math.round((item.daysUnopened / maxGanVal) * 100));
                       return (
-                        <div key={item.number} className="flex items-center gap-3 text-xs">
-                          <span className="w-8 font-mono text-sm font-black text-red-600 dark:text-red-400">
+                        <div key={item.number} className="flex items-center gap-2.5 text-xs">
+                          <span className="w-7 font-mono text-sm font-extrabold text-red-600 dark:text-red-400">
                             {item.number}
                           </span>
-                          <div className="flex-1 h-6 rounded-lg bg-muted/50 overflow-hidden p-0.5">
+                          <div className="flex-1 h-5 rounded-lg bg-muted/60 overflow-hidden p-0.5">
                             <div
                               style={{ width: `${pct}%` }}
-                              className={`h-full rounded-md flex items-center justify-end pr-2 text-[10px] font-black text-white transition-all duration-500 ${
+                              className={`h-full rounded-md transition-all duration-500 ${
                                 idx < 3
-                                  ? 'bg-gradient-to-r from-red-500 to-rose-600'
+                                  ? 'bg-gradient-to-r from-[#b80c0c] to-rose-500'
                                   : 'bg-gradient-to-r from-amber-500 to-orange-500'
                               }`}
-                            >
-                              {item.daysUnopened} ngày
-                            </div>
+                            />
                           </div>
-                          <span className="w-16 text-right text-[10px] text-muted-foreground">
-                            Max: {item.maxGanHistory}d
+                          <span className="w-16 text-right font-mono font-bold text-foreground">
+                            {item.daysUnopened} ngày
+                          </span>
+                          <span className="w-14 text-right text-[10px] text-muted-foreground">
+                            Max {item.maxGanHistory}d
                           </span>
                         </div>
                       );
@@ -957,39 +1001,41 @@ export default function UserDashboardPage() {
                 <div className="rounded-2xl border bg-card p-5 shadow-xs">
                   <div className="mb-4 flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-black text-foreground">
-                        🔥 Biểu Đồ Số Hay Ra Nhất (Tần Suất Cao)
+                      <h3 className="flex items-center gap-1.5 text-sm font-extrabold text-foreground">
+                        <Flame className="size-4 text-red-600 dark:text-red-400" />
+                        Biểu Đồ Số Hay Ra Nhất (Tần Suất Cao)
                       </h3>
                       <p className="text-[11px] text-muted-foreground">
                         Số lần xuất hiện trong 120 ngày gần nhất (Top 10)
                       </p>
                     </div>
-                    <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 dark:text-emerald-300">
+                    <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
                       Đơn vị: Lần về
                     </span>
                   </div>
 
                   <div className="space-y-2.5">
                     {chartHotFreq.map((item, idx) => {
-                      const pct = Math.max(15, Math.round((item.count / maxFreqVal) * 100));
+                      const pct = Math.max(12, Math.round((item.count / maxFreqVal) * 100));
                       return (
-                        <div key={item.number} className="flex items-center gap-3 text-xs">
-                          <span className="w-8 font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">
+                        <div key={item.number} className="flex items-center gap-2.5 text-xs">
+                          <span className="w-7 font-mono text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
                             {item.number}
                           </span>
-                          <div className="flex-1 h-6 rounded-lg bg-muted/50 overflow-hidden p-0.5">
+                          <div className="flex-1 h-5 rounded-lg bg-muted/60 overflow-hidden p-0.5">
                             <div
                               style={{ width: `${pct}%` }}
-                              className={`h-full rounded-md flex items-center justify-end pr-2 text-[10px] font-black text-white transition-all duration-500 ${
+                              className={`h-full rounded-md transition-all duration-500 ${
                                 idx < 3
                                   ? 'bg-gradient-to-r from-emerald-500 to-teal-600'
                                   : 'bg-gradient-to-r from-blue-500 to-sky-500'
                               }`}
-                            >
-                              {item.count} lần
-                            </div>
+                            />
                           </div>
-                          <span className="w-12 text-right text-[10px] font-bold text-muted-foreground">
+                          <span className="w-14 text-right font-mono font-bold text-foreground">
+                            {item.count} lần
+                          </span>
+                          <span className="w-11 text-right text-[10px] font-bold text-muted-foreground">
                             Top {idx + 1}
                           </span>
                         </div>
@@ -1034,8 +1080,9 @@ export default function UserDashboardPage() {
 
               {/* 3 Câu Hỏi Sẵn Theo Spec Docx */}
               <div className="border-b bg-muted/30 px-4 py-3">
-                <div className="mb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
-                  ✨ 3 Câu hỏi gợi ý sẵn (Bấm để hỏi ngay):
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground">
+                  <Sparkles className="size-3.5 text-amber-500" />
+                  3 Câu hỏi gợi ý sẵn (Bấm để hỏi ngay):
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {PRESET_AI_QUESTIONS.map((q, idx) => (
@@ -1063,13 +1110,15 @@ export default function UserDashboardPage() {
                     className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed whitespace-pre-line shadow-2xs ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed shadow-2xs space-y-1 ${
                         msg.role === 'user'
-                          ? 'bg-red-600 text-white font-semibold'
+                          ? 'bg-[#b80c0c] text-white font-semibold'
                           : 'border bg-muted/40 text-foreground'
                       }`}
                     >
-                      {msg.content}
+                      <div>
+                        {msg.role === 'assistant' ? formatRichMessage(msg.content) : msg.content}
+                      </div>
                       <div
                         className={`mt-1.5 text-[10px] ${
                           msg.role === 'user' ? 'text-white/75 text-right' : 'text-muted-foreground'

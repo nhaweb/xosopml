@@ -97,14 +97,14 @@ export default function MuaVeOnlinePage() {
 
   return (
     <SiteFrame>
-      <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
+      <div className={cart.length > 0 ? 'pb-24' : ''}>
         {/* Header Giới Thiệu */}
         <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-red-600/10 px-3 py-1 text-xs font-black uppercase tracking-wider text-red-600 dark:text-red-400">
-              <Sparkles className="size-3.5" /> Mua Vé Số Online PML
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-red-600/10 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-red-600 dark:text-red-400">
+              <Sparkles className="size-3.5" /> Mua Vé Số Online Minh Luân
             </div>
-            <h1 className="mt-2 text-2xl sm:text-4xl font-black tracking-tight text-foreground">
+            <h1 className="mt-2 text-2xl sm:text-4xl font-extrabold tracking-tight text-foreground">
               Chọn Số Theo Ảnh Vé Thật — Giao Tận Tay Hoặc Giữ Hộ
             </h1>
             <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
@@ -192,9 +192,9 @@ export default function MuaVeOnlinePage() {
           <div className="flex flex-wrap items-center gap-1.5">
             {[
               { id: 'all', label: 'Tất cả số' },
-              { id: 'Thần Tài', label: '🧧 Thần Tài (39-79)' },
-              { id: 'Lộc Phát', label: '💰 Lộc Phát (68-86)' },
-              { id: 'Tứ Quý', label: '👑 Tứ Quý' },
+              { id: 'Thần Tài', label: 'Thần Tài (39-79)' },
+              { id: 'Lộc Phát', label: 'Lộc Phát (68-86)' },
+              { id: 'Tứ Quý', label: 'Tứ Quý' },
             ].map((tag) => (
               <button
                 key={tag.id}
@@ -229,40 +229,47 @@ export default function MuaVeOnlinePage() {
           {filteredTickets.map((ticket) => {
             const inCart = cart.find((item) => item.ticket.id === ticket.id);
             const isSoldOut = ticket.remainingQuantity === 0;
+            const regionBand =
+              ticket.region === 'south'
+                ? 'from-[#b80c0c] to-[#8b0000]'
+                : ticket.region === 'central'
+                ? 'from-amber-600 to-orange-700'
+                : 'from-[#0f2454] to-[#1e3a8a]';
 
             return (
               <div
                 key={ticket.id}
                 className="group relative flex flex-col overflow-hidden rounded-2xl border bg-card shadow-xs transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-red-500/50"
               >
-                {/* Phần Ảnh Vé Số Thực Tế */}
-                <div className="relative aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-red-600 via-rose-600 to-amber-600 p-3 text-white flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-md bg-black/40 px-2 py-0.5 text-[10px] font-black uppercase backdrop-blur-xs tracking-wider">
+                {/* Phần Ảnh Vé Số Thực Tế (Kiểu tờ vé giấy bảo mật sáng nét) */}
+                <div className="relative aspect-[16/10] w-full overflow-hidden border-b border-amber-300/60 bg-gradient-to-br from-[#fffdf7] via-[#fff8e7] to-[#fdeec8] text-neutral-900 flex flex-col justify-between">
+                  {/* Dải màu phân biệt miền ở cạnh trên */}
+                  <div className={`flex items-center justify-between bg-gradient-to-r ${regionBand} px-3 py-1.5 text-white`}>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wide">
                       {ticket.provinceName}
                     </span>
-                    <span className="rounded-md bg-amber-400 text-black px-1.5 py-0.5 text-[10px] font-black">
+                    <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-neutral-950">
                       {ticket.drawTime}
                     </span>
                   </div>
 
-                  {/* Dãy Số Dập Nổi Bật Dạng font-mono */}
-                  <div className="my-auto text-center">
-                    <div className="text-[10px] uppercase font-bold tracking-widest text-amber-200">
-                      VÉ SỐ TRUYỀN THỐNG
+                  {/* Dãy Số Dập Nổi Bật Dạng font-mono tương phản cao */}
+                  <div className="my-auto px-3 text-center">
+                    <div className="text-[10px] font-extrabold uppercase tracking-wide text-[#9e0b0f]">
+                      XỔ SỐ KIẾN THIẾT MINH LUÂN
                     </div>
-                    <div className="mt-0.5 text-3xl font-black font-mono tracking-widest text-white drop-shadow-md">
+                    <div className="mt-1 inline-block rounded-lg border border-red-200 bg-white/90 px-3 py-0.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-widest text-[#b80c0c] shadow-2xs">
                       {ticket.ticketNumber}
                     </div>
-                    <div className="text-[10px] text-white/80">
+                    <div className="mt-1 text-[10px] font-semibold text-neutral-600">
                       Mở thưởng ngày {ticket.drawDate}
                     </div>
                   </div>
 
-                  {/* Giả lập đường vân bảo mật vé thật */}
-                  <div className="flex items-center justify-between border-t border-white/20 pt-1 text-[9px] text-white/70">
-                    <span>Mã Seri: #{ticket.id.toUpperCase()}</span>
-                    <span>PML Official Safe</span>
+                  {/* Đường vân bảo mật vé thật */}
+                  <div className="flex items-center justify-between border-t border-dashed border-amber-400/70 bg-amber-100/50 px-3 py-1 text-[9px] font-bold text-neutral-700">
+                    <span>Seri: #{ticket.id.toUpperCase()}</span>
+                    <span>Minh Luân Official Safe</span>
                   </div>
                 </div>
 
@@ -383,8 +390,8 @@ export default function MuaVeOnlinePage() {
                   <div className="flex items-center gap-2 text-xs font-black uppercase text-red-600 dark:text-red-400">
                     <Sparkles className="size-4" /> Thanh toán & Nhận vé
                   </div>
-                  <h3 className="mt-1 text-xl font-black text-foreground">
-                    Xác Nhận Đơn Mua Vé Số PML
+                  <h3 className="mt-1 text-xl font-extrabold text-foreground">
+                    Xác Nhận Đơn Mua Vé Số Minh Luân
                   </h3>
 
                   {/* Tóm tắt vé đã chọn */}
@@ -586,19 +593,19 @@ export default function MuaVeOnlinePage() {
                     Đặt Mua Vé Số Thành Công!
                   </h3>
                   <p className="mt-2 text-xs text-muted-foreground max-w-sm mx-auto">
-                    Mã đơn hàng: <span className="font-mono font-bold text-foreground">PML-89324</span>. 
+                    Mã đơn hàng: <span className="font-mono font-bold text-foreground">ML-89324</span>. 
                     {deliveryMethod === 'safekeeping'
                       ? ' Vé đã được lưu vào két an toàn và hiển thị trong User Dashboard của bạn.'
-                      : ' Nhân viên PML sẽ giao vé đến tận tay bạn trước 1 tiếng mở thưởng.'}
+                      : ' Nhân viên Minh Luân sẽ giao vé đến tận tay bạn trước 1 tiếng mở thưởng.'}
                   </p>
 
                   {/* QR Demo */}
                   {paymentMethod !== 'cod' && (
                     <div className="my-5 inline-block rounded-2xl border bg-white p-3 shadow-xs">
-                      <div className="size-36 bg-gray-100 rounded-xl grid place-items-center text-gray-500 font-mono text-xs">
+                      <div className="size-36 bg-neutral-100 rounded-xl grid place-items-center text-neutral-700 font-mono text-xs font-bold border border-neutral-200">
                         [QR Chuyển Khoản / MoMo]
                       </div>
-                      <div className="mt-1 text-[11px] font-bold text-gray-700">
+                      <div className="mt-1.5 text-[11px] font-bold text-neutral-800">
                         Quét mã thanh toán: {grandTotal.toLocaleString('vi-VN')} đ
                       </div>
                     </div>

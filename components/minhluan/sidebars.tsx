@@ -13,6 +13,9 @@ import {
   HelpCircle,
   Sparkles,
   UserPlus,
+  Coins,
+  Trophy,
+  ShieldCheck,
 } from 'lucide-react';
 import { DayLotteryData } from '@/types/lottery';
 import { PROVINCES } from '@/config/lottery-provinces';
@@ -195,17 +198,16 @@ export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSideb
                   key={idx}
                   type="button"
                   onClick={() => onSelectDate(cell.date)}
-                  className={`rounded py-1 font-mono transition-colors ${
-                    selected
-                      ? 'bg-red-600 font-black text-white shadow-2xs'
-                      : isToday
+                  className={`rounded py-1 font-mono transition-colors ${selected
+                    ? 'bg-red-600 font-black text-white shadow-2xs'
+                    : isToday
                       ? 'bg-blue-600/15 font-black text-blue-700 dark:text-blue-400 ring-1 ring-blue-500'
                       : !cell.inMonth
-                      ? 'text-muted-foreground/40 hover:bg-muted/40'
-                      : isWeekend
-                      ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40'
-                      : 'text-foreground hover:bg-muted'
-                  }`}
+                        ? 'text-muted-foreground/40 hover:bg-muted/40'
+                        : isWeekend
+                          ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40'
+                          : 'text-foreground hover:bg-muted'
+                    }`}
                 >
                   {cell.date.getDate()}
                 </button>
@@ -409,25 +411,26 @@ export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSideb
       {/* Section 2 #3: Banner NHIỀU TIỆN ÍCH - ĐĂNG KÝ THÀNH VIÊN NGAY (xuống hàng) */}
       <Link
         href="/dashboard"
-        className="group relative block overflow-hidden rounded-xl border-2 border-amber-400 bg-gradient-to-b from-[#b90000] via-[#8f0000] to-[#5e0000] p-4 text-center text-white shadow-lg transition-transform hover:scale-[1.02]"
+        className="group relative block overflow-hidden rounded-xl border-2 border-amber-400/90 bg-gradient-to-b from-[#a80808] via-[#880000] to-[#5e0000] p-4 text-center text-white shadow-md transition-transform hover:scale-[1.02]"
       >
-        <div className="pointer-events-none absolute -top-4 -right-4 text-5xl opacity-25">🪙</div>
-        <div className="pointer-events-none absolute -bottom-3 -left-3 text-5xl opacity-25">💰</div>
+        <div className="pointer-events-none absolute -top-3 -right-3 opacity-15">
+          <Coins className="size-16 text-amber-300" />
+        </div>
 
         <div className="relative">
-          <div className="mx-auto mb-2 inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-[10px] font-black uppercase text-amber-300">
+          <div className="mx-auto mb-2 inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-300">
             <Sparkles className="size-3" /> Hội Viên Minh Luân
           </div>
-          <div className="text-lg font-black uppercase leading-snug tracking-tight text-amber-300 drop-shadow">
+          <div className="text-lg font-extrabold uppercase leading-snug tracking-wide text-amber-300">
             NHIỀU TIỆN ÍCH
           </div>
-          <div className="mt-1 text-base font-black uppercase leading-snug tracking-tight text-white drop-shadow">
+          <div className="mt-1 text-base font-extrabold uppercase leading-snug tracking-wide text-white">
             ĐĂNG KÝ THÀNH VIÊN NGAY
           </div>
           <p className="mt-2 text-[11px] text-amber-100/90">
             Mua vé online · Lưu số yêu thích · Con số phong thủy · Trợ lý AI xổ số
           </p>
-          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-1.5 text-xs font-black text-red-950 shadow-md group-hover:from-amber-300 group-hover:to-yellow-400">
+          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-300 to-amber-500 px-4 py-1.5 text-xs font-extrabold text-red-950 shadow-sm group-hover:from-amber-200 group-hover:to-amber-400">
             <UserPlus className="size-3.5" /> Đăng ký ngay
           </span>
         </div>
@@ -442,29 +445,41 @@ export function RightSidebar() {
       {/* #6: Banner dọc XỔ SỐ MINH LUÂN — ĐỔI SỐ TRÚNG ĐẶC BIỆT */}
       <Link
         href="/mua-ve-online"
-        className="group relative block overflow-hidden rounded-xl border-2 border-blue-400 bg-gradient-to-b from-[#0b45d6] via-[#072ca3] to-[#041a66] p-4 text-center text-white shadow-lg transition-transform hover:scale-[1.01]"
+        className="group relative block overflow-hidden rounded-xl border-2 border-amber-400/70 bg-gradient-to-b from-[#0f2454] via-[#132c68] to-[#081533] p-4 text-center text-white shadow-md transition-transform hover:scale-[1.01]"
       >
-        <div className="text-sm font-black uppercase tracking-wider text-amber-300">
+        <div className="text-xs font-extrabold uppercase tracking-wide text-amber-300">
           XỔ SỐ MINH LUÂN
         </div>
-        <div className="mt-2 text-2xl font-black uppercase leading-tight tracking-tight text-white drop-shadow">
+        <div className="mt-2 text-2xl font-extrabold uppercase leading-tight tracking-wide text-white">
           ĐỔI SỐ
           <br />
           TRÚNG
           <br />
           ĐẶC BIỆT
         </div>
-        <div className="mt-3 rounded-lg bg-black/25 py-1.5 font-mono text-xl font-black tracking-wider text-amber-300">
+        <div className="mt-3 rounded-lg border border-amber-400/30 bg-black/30 py-1.5 font-mono text-lg font-extrabold tracking-wide text-amber-300">
           {siteConfig.hotline}
         </div>
-        <ul className="mt-3 space-y-1 text-left pl-4 text-xs font-extrabold text-amber-200">
-          <li>✓ Nhanh nhất</li>
-          <li>✓ Uy Tín</li>
-          <li>✓ Bảo Mật</li>
-          <li>✓ Tận Nơi</li>
+        <ul className="mt-3 space-y-1.5 text-left pl-3 text-xs font-bold text-slate-100">
+          <li className="flex items-center gap-1.5">
+            <Check className="size-3.5 text-amber-400 shrink-0" /> Nhanh nhất
+          </li>
+          <li className="flex items-center gap-1.5">
+            <Check className="size-3.5 text-amber-400 shrink-0" /> Uy Tín
+          </li>
+          <li className="flex items-center gap-1.5">
+            <ShieldCheck className="size-3.5 text-amber-400 shrink-0" /> Bảo Mật
+          </li>
+          <li className="flex items-center gap-1.5">
+            <Check className="size-3.5 text-amber-400 shrink-0" /> Tận Nơi
+          </li>
         </ul>
-        <div className="my-3 text-4xl">🪙💰🎁</div>
-        <span className="inline-block rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-5 py-1.5 text-xs font-black text-blue-950 shadow-md group-hover:from-amber-200 group-hover:to-amber-400">
+        <div className="my-3.5 flex justify-center">
+          <span className="grid size-12 place-items-center rounded-2xl bg-amber-400/15 border border-amber-400/40 text-amber-300">
+            <Trophy className="size-6" />
+          </span>
+        </div>
+        <span className="inline-block rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-5 py-1.5 text-xs font-extrabold text-slate-950 shadow-sm group-hover:from-amber-200 group-hover:to-amber-400">
           Click vào đây
         </span>
       </Link>
@@ -510,15 +525,15 @@ export function RightSidebar() {
         href={siteConfig.youtubeUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="group relative block overflow-hidden rounded-xl border-2 border-red-500/80 bg-gradient-to-b from-[#0b1f54] via-[#0e2d7d] to-[#081740] p-4 text-center text-white shadow-lg transition-all hover:scale-[1.02] hover:border-red-400"
+        className="group relative block overflow-hidden rounded-xl border-2 border-red-500/70 bg-gradient-to-b from-[#0b1f54] via-[#0e2d7d] to-[#081740] p-4 text-center text-white shadow-md transition-all hover:scale-[1.02] hover:border-red-400"
       >
-        <div className="text-xs font-black uppercase tracking-wider text-amber-300">
+        <div className="text-xs font-bold uppercase tracking-wide text-amber-300">
           KẾT QUẢ XỔ SỐ
         </div>
-        <div className="mt-0.5 text-sm font-black uppercase tracking-wide text-white">
+        <div className="mt-0.5 text-sm font-extrabold uppercase tracking-wide text-white">
           TƯỜNG THUẬT
         </div>
-        <div className="text-2xl font-black uppercase tracking-tight text-red-500 drop-shadow-[0_1.5px_0_rgba(255,255,255,0.9)]">
+        <div className="mt-0.5 inline-block rounded-md bg-red-600 px-3 py-0.5 text-lg font-extrabold uppercase tracking-wide text-white shadow-xs">
           TRỰC TIẾP
         </div>
 

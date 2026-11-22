@@ -127,21 +127,30 @@ export function RegionLotteryBoard({
           <tbody className="divide-y divide-border">
             {prizeRowsTemplate.map((prizeTpl, prizeIdx) => {
               const isSpecial =
-                prizeTpl.prizeName.includes('Đặc Biệt') ||
-                prizeTpl.prizeName.includes('G.ĐB') ||
-                prizeTpl.prizeName.includes('G.Tám');
+                prizeTpl.prizeName.includes('Đặc Biệt') || prizeTpl.prizeName.includes('G.ĐB');
+              const isEighth = prizeTpl.prizeName.includes('G.Tám');
+              const rowBg = isSpecial
+                ? 'bg-red-50/80 dark:bg-red-950/25 font-bold'
+                : prizeIdx % 2 === 0
+                ? 'bg-card'
+                : 'bg-muted/20';
+              const stickyBg = isSpecial
+                ? 'bg-red-50 dark:bg-[#271515]'
+                : prizeIdx % 2 === 0
+                ? 'bg-card'
+                : 'bg-muted/35 dark:bg-card';
+
               return (
-                <tr
-                  key={prizeTpl.prizeName}
-                  className={`transition-colors ${
-                    isSpecial ? 'bg-red-500/5 font-bold' : prizeIdx % 2 === 0 ? 'bg-card' : 'bg-muted/15'
-                  }`}
-                >
+                <tr key={prizeTpl.prizeName} className={`transition-colors ${rowBg}`}>
                   {/* Cột tên giải bên trái */}
                   <th
                     scope="row"
-                    className={`sticky left-0 z-10 w-28 border-r px-2 py-3 text-center text-xs font-bold bg-card ${
-                      isSpecial ? 'text-red-600 dark:text-red-400 font-black' : 'text-foreground'
+                    className={`sticky left-0 z-10 w-24 border-r px-2 py-2.5 text-center text-xs font-bold ${stickyBg} ${
+                      isSpecial
+                        ? 'text-red-700 dark:text-red-400 font-extrabold'
+                        : isEighth
+                        ? 'text-red-600 dark:text-red-400 font-bold'
+                        : 'text-foreground'
                     }`}
                   >
                     <span>{prizeTpl.prizeName}</span>
@@ -174,6 +183,7 @@ export function RegionLotteryBoard({
                                 mode={mode}
                                 highlightDigit={highlightDigit}
                                 isSpecial={isSpecial}
+                                isEighth={isEighth}
                               />
                               {nIdx < numbers.length - 1 && numbers.length > 2 && (
                                 <span className="text-muted-foreground/40 text-xs hidden sm:inline">·</span>

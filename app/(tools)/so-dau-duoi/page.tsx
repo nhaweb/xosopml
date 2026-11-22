@@ -55,9 +55,9 @@ export default function SoDauDuoiPage() {
     <SiteFrame>
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
             <ScrollText className="size-4" />
-            Sớ Đầu Đuôi Minh Ngọc
+            Sớ Đầu Đuôi Minh Luân
           </div>
           <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl text-foreground">
             Sớ Lô Tô Giải Đặc Biệt & Giải 8

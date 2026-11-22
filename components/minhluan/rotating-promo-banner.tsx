@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, Coins } from 'lucide-react';
 
 const SLIDES = [
   {
@@ -39,44 +39,44 @@ export function RotatingPromoBanner() {
   return (
     <Link
       href={current.href}
-      className="group relative mb-4 block overflow-hidden rounded-xl border-2 border-amber-400 bg-gradient-to-r from-[#ffbf00] via-[#ffe066] to-[#ffae00] px-3 py-3 sm:px-5 sm:py-3.5 shadow-md transition-transform hover:scale-[1.005]"
+      className="group relative mb-4 block overflow-hidden rounded-xl border-2 border-amber-400/90 bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 dark:from-amber-500/20 dark:via-yellow-500/15 dark:to-amber-600/25 px-3 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-transform hover:scale-[1.005]"
     >
-      {/* Sparkle light overlay */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.65),transparent_50%),radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.45),transparent_40%)]" />
+      {/* Soft glow */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.55),transparent_55%)] dark:bg-none" />
 
       <div className="relative flex items-center justify-between gap-2 sm:gap-4">
-        {/* Logo Trái: Thần Tài (dùng chính favicon Thần Tài của Minh Luân) */}
+        {/* Logo Trái: Thần Tài */}
         <div className="shrink-0">
           <img
             src="/favicon-logo.png"
             alt="Thần Tài Minh Luân"
-            className="size-12 sm:size-16 rounded-full border-2 border-red-600 bg-white object-cover shadow-md transition-transform group-hover:rotate-3"
+            className="size-12 sm:size-16 rounded-full border-2 border-[#a80808] bg-white object-cover shadow-md transition-transform group-hover:rotate-3"
           />
         </div>
 
-        {/* Giữa: 2 dòng chữ thay đổi cho nhau trên banner (#9 ở vị trí #5) */}
+        {/* Giữa: 2 dòng chữ thay đổi cho nhau trên banner */}
         <div
           className={`flex-1 text-center transition-all duration-300 ${
             visible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-1 scale-95'
           }`}
         >
-          <div className="inline-flex items-center gap-1 rounded-full bg-red-700 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-amber-200 shadow-2xs">
+          <div className="inline-flex items-center gap-1 rounded-full bg-[#9e0b0f] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200 shadow-2xs">
             <Sparkles className="size-3" /> Xổ Số Minh Luân
           </div>
-          <div className="mt-1 text-lg sm:text-2xl md:text-[26px] font-black uppercase tracking-tight text-[#b80000] drop-shadow-[0_1.5px_0_rgba(255,255,255,0.95)]">
+          <div className="mt-1 text-lg sm:text-2xl md:text-[26px] font-extrabold uppercase tracking-wide text-[#9e0b0f] dark:text-amber-300">
             {current.text}
           </div>
-          <div className="mt-0.5 hidden sm:flex items-center justify-center gap-1.5 text-xs font-extrabold text-[#5c1600]">
+          <div className="mt-0.5 hidden sm:flex items-center justify-center gap-1.5 text-xs font-bold text-[#5c1600] dark:text-amber-100/90">
             <span>{current.subtext}</span>
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-red-700 px-2 py-0.5 text-[10px] font-black text-white">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#9e0b0f] px-2.5 py-0.5 text-[10px] font-bold text-white">
               {current.cta} <ArrowRight className="size-3" />
             </span>
           </div>
         </div>
 
-        {/* Logo Phải: Túi Tiền Tài Lộc */}
-        <div className="grid size-12 sm:size-16 shrink-0 place-items-center rounded-full border-2 border-red-600 bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-600 text-2xl sm:text-4xl shadow-md transition-transform group-hover:-rotate-3">
-          💰
+        {/* Logo Phải: Huy hiệu Tài Lộc đồng bộ */}
+        <div className="grid size-12 sm:size-16 shrink-0 place-items-center rounded-full border-2 border-[#a80808] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-600 text-[#7c0000] shadow-md transition-transform group-hover:-rotate-3">
+          <Coins className="size-6 sm:size-8 stroke-[2.2]" />
         </div>
       </div>
 
@@ -86,7 +86,7 @@ export function RotatingPromoBanner() {
           <span
             key={s.text}
             className={`h-1.5 rounded-full transition-all ${
-              idx === index ? 'w-6 bg-red-700' : 'w-1.5 bg-red-700/35'
+              idx === index ? 'w-6 bg-[#9e0b0f] dark:bg-amber-400' : 'w-1.5 bg-[#9e0b0f]/30 dark:bg-amber-400/35'
             }`}
           />
         ))}
@@ -94,4 +94,3 @@ export function RotatingPromoBanner() {
     </Link>
   );
 }
-

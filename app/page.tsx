@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Check, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import { getLotteryResults } from '@/lib/mock-lottery-data';
@@ -43,11 +43,25 @@ export default function Page() {
     [lotteryData]
   );
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('minhluan_theme');
+      const isDark = saved === 'dark';
+      setDark(isDark);
+      document.documentElement.classList.toggle('dark', isDark);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const toggleDark = () => {
     const next = !dark;
     setDark(next);
-    if (typeof document !== 'undefined') {
+    try {
+      localStorage.setItem('minhluan_theme', next ? 'dark' : 'light');
       document.documentElement.classList.toggle('dark', next);
+    } catch {
+      // ignore
     }
   };
 
@@ -175,9 +189,9 @@ export default function Page() {
                         setPriorityRegion(reg.id as any);
                         setActiveRegionTab('all');
                       }}
-                      className="accent-blue-600"
+                      className="accent-red-600"
                     />
-                    <span className={priorityRegion === reg.id ? 'text-red-600 font-black' : ''}>
+                    <span className={priorityRegion === reg.id ? 'text-red-600 dark:text-red-400 font-extrabold' : ''}>
                       {reg.label}
                     </span>
                   </label>
@@ -189,13 +203,14 @@ export default function Page() {
                 <button
                   type="button"
                   onClick={() => setActiveDate(new Date())}
-                  className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-extrabold transition-all ${
                     isToday
-                      ? 'bg-red-600 text-white shadow-xs'
+                      ? 'bg-[#b80c0c] text-white shadow-xs'
                       : 'border bg-muted/50 text-foreground hover:bg-muted'
                   }`}
                 >
-                  🔴 Hôm nay ({formatDate(new Date())})
+                  <span className={`size-2 rounded-full ${isToday ? 'bg-amber-300 animate-pulse' : 'bg-red-500'}`} />
+                  Hôm nay ({formatDate(new Date())})
                 </button>
                 <button
                   type="button"
@@ -204,13 +219,14 @@ export default function Page() {
                     y.setDate(y.getDate() - 1);
                     setActiveDate(y);
                   }}
-                  className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-extrabold transition-all ${
                     !isToday
-                      ? 'bg-red-600 text-white shadow-xs'
+                      ? 'bg-[#b80c0c] text-white shadow-xs'
                       : 'border bg-muted/50 text-foreground hover:bg-muted'
                   }`}
                 >
-                  📅 Hôm qua ({prevLotteryData.formattedDate})
+                  <CalendarDays className="size-3.5" />
+                  Hôm qua ({prevLotteryData.formattedDate})
                 </button>
               </div>
 

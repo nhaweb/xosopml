@@ -111,8 +111,8 @@ export default async function ProvincePage({ params }: PageProps) {
               <MapPin className="size-4" />
               XS{province.code} · SX{province.code} · XSKT {province.name}
             </div>
-            <h1 className="mt-1 text-2xl sm:text-4xl font-black tracking-tight text-foreground">
-              Kết Quả Xổ Số {province.name} - Minh Ngọc™
+            <h1 className="mt-1 text-2xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+              Kết Quả Xổ Số {province.name} - Minh Luân
             </h1>
             <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground">
               Trực tiếp KQXS {province.name} vào lúc <strong className="text-foreground">{province.drawTime}</strong> ({drawDayNames} hàng tuần). Cập nhật bảng kết quả và thống kê lô tô đầu đuôi 0 đến 9.
