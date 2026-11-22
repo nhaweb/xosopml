@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { getLotteryResults } from '@/lib/mock-lottery-data';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
+import { HeroPromoSection } from '@/components/lottery/hero-promo-section';
+import { AiLotoSummaryWidget } from '@/components/lottery/ai-loto-summary-widget';
 import { LiveCountdownBanner } from '@/components/lottery/live-countdown-banner';
 import { WeeklyScheduleMatrix } from '@/components/lottery/weekly-schedule-matrix';
 import { ProvinceQuickStrip } from '@/components/lottery/province-quick-strip';
@@ -189,13 +191,16 @@ export default function Page() {
 
       {/* Main Content Area */}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8 lg:px-8">
+        {/* Section 1: Hero Promo Banner (Logo Nắm bắt cơ hội | Vận may mở lối | Quay thử) */}
+        <HeroPromoSection />
+
         {/* Live Countdown & Direct Status Bar */}
         <LiveCountdownBanner />
 
         {/* Thanh Cuộn Nhanh 63 Đài Tỉnh */}
         <ProvinceQuickStrip />
 
-        {/* Banner Tra Cứu & Bộ Chọn Ngày */}
+        {/* Chuyển đổi nhanh Hôm Nay / Hôm Qua (3 Miền) & Bộ Chọn Ngày */}
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
@@ -208,13 +213,40 @@ export default function Page() {
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
               Cập nhật bảng vàng kết quả 3 miền, thống kê đầu đuôi loto 0 đến 9 và sổ mơ chính xác.
             </p>
+
+            {/* Hai nút chuyển đổi nổi bật Hôm nay / Hôm qua 3 miền theo phản hồi khách hàng */}
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedDayOffset(0)}
+                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition-all shadow-xs ${
+                  selectedDayOffset === 0
+                    ? 'bg-red-600 text-white scale-105 shadow-md ring-2 ring-red-400'
+                    : 'border bg-card text-foreground hover:bg-muted'
+                }`}
+              >
+                <span className="size-2 rounded-full bg-amber-300 animate-ping inline-block" />
+                🔴 KQXS Hôm Nay (3 Miền)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDayOffset(1)}
+                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition-all shadow-xs ${
+                  selectedDayOffset === 1
+                    ? 'bg-red-600 text-white scale-105 shadow-md ring-2 ring-red-400'
+                    : 'border bg-card text-foreground hover:bg-muted'
+                }`}
+              >
+                📅 KQXS Hôm Qua (3 Miền)
+              </button>
+            </div>
           </div>
 
           {/* Quick Date Selector */}
           <div className="rounded-xl border bg-card p-2 shadow-xs">
             <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-bold text-muted-foreground">
               <CalendarDays className="size-3.5 text-primary" />
-              Xem theo ngày:
+              Xem ngày khác:
             </div>
             <div className="flex flex-wrap gap-1.5">
               {quickDates.map((item) => {
@@ -272,6 +304,11 @@ export default function Page() {
             dateStr={lotteryData.formattedDate}
             results={lotteryData.north}
           />
+        </div>
+
+        {/* Trung Tâm Phân Tích Lô Tô & AI Intelligence Hub (Gan cực đại, Tần suất, Cầu số) */}
+        <div className="mt-8">
+          <AiLotoSummaryWidget />
         </div>
 
         {/* Lịch Mở Thưởng 3 Miền Trong Tuần */}

@@ -118,3 +118,4 @@ d:\xosopml\
 | **07/11/2026** | **Antigravity** | Xây dựng Trang Thống Kê Tần Suất Lô Tô 30 kỳ (`/thong-ke/tan-suat`): Top Hot, Top Cold, Ma trận 100 số. | Hoàn thành |
 | **07/11/2026** | **Antigravity** | Xây dựng Trang Bảng Đặc Biệt Năm/Tháng (`/thong-ke/giai-dac-biet`): Ma trận 31 ngày x 12 tháng, highlight số kép. | Hoàn thành |
 | **07/11/2026** | **Antigravity** | Hoàn thiện Trang Xổ Số Theo Tỉnh chuẩn Minh Ngọc (`/[region]/[province]` & `/ket-qua-xo-so/[region]/[province].html`): Breadcrumb, Dò vé riêng đài, 6 kỳ mở thưởng gần nhất, thông tin cơ cấu giải & lịch quay. | Hoàn thành |
+| **22/11/2026** | **Antigravity** | Tích hợp Section 1 (Hero Promo Banner 3 phần: Logo 'Nắm bắt cơ hội', 'Vận may mở lối! Đăng ký tài khoản ngay!' kẹp giữa Thần tài 🧧 & Túi tiền 💰, Banner Quay thử), nút chuyển đổi KQXS Hôm nay / Hôm qua 3 miền, và AI Loto Intelligence Hub (`hero-promo-section.tsx`, `ai-loto-summary-widget.tsx`, `app/page.tsx`). | Hoàn thành |
