@@ -61,12 +61,12 @@ export default function LoGanPage() {
           <p className="text-xs font-bold text-muted-foreground uppercase">Gan lâu nhất</p>
           <p className="mt-1 text-lg font-black tabular-nums">{items[0]?.number ?? '—'} · {items[0]?.daysUnopened ?? 0} ngày</p>
         </article>
-        <article className="rounded-2xl border border-red-200 bg-red-500/10 p-4 shadow-sm">
-          <p className="flex items-center gap-1.5 text-xs font-bold text-red-600 uppercase">
+        <article className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-500/10 p-4 shadow-sm">
+          <p className="flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400 uppercase">
             <TriangleAlert className="size-3.5" />
             Gan trên {GAN_THRESHOLD} ngày
           </p>
-          <p className="mt-1 text-lg font-black text-red-600 tabular-nums">{hotCount} số</p>
+          <p className="mt-1 text-lg font-extrabold text-red-600 dark:text-red-400 tabular-nums">{hotCount} số</p>
         </article>
       </div>
 

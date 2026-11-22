@@ -1,101 +1,89 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { BookOpen, Menu, Moon, Radio, Sun, TrendingUp, Trophy, X, Dices, ScrollText, Printer, BarChart3, Table, ShoppingBag, User } from 'lucide-react';
-import { siteConfig } from '@/config/site';
-
-const navItems = [
-  { label: 'Trang chủ', href: '/' },
-  { label: 'Mua Vé Online', href: '/mua-ve-online', icon: ShoppingBag },
-  { label: 'Dashboard', href: '/dashboard', icon: User },
-  { label: 'Quay thử', href: '/quay-thu', icon: Dices },
-  { label: 'Sớ đầu đuôi', href: '/so-dau-duoi', icon: ScrollText },
-  { label: 'Tần suất', href: '/thong-ke/tan-suat', icon: BarChart3 },
-  { label: 'Bảng ĐB', href: '/thong-ke/giai-dac-biet', icon: Table },
-  { label: 'Sổ mơ', href: '/so-mo', icon: BookOpen },
-  { label: 'Lô gan', href: '/thong-ke/lo-gan', icon: TrendingUp },
-  { label: 'In vé dò', href: '/in-ve-do', icon: Printer },
-];
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { MinhLuanHeader } from '@/components/minhluan/minhluan-header';
+import { TicketCheckerModal } from '@/components/lottery/ticket-checker-modal';
+import { SiteFooter } from './site-footer';
+import { getLotteryResults } from '@/lib/mock-lottery-data';
+import { audioSynth } from '@/lib/audio-synthesizer';
+import { formatDate } from '@/lib/format';
 
 export function SiteFrame({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [dark, setDark] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [checkerOpen, setCheckerOpen] = useState(false);
+
+  const todayData = useMemo(() => getLotteryResults(new Date()), []);
+  const allProvinces = useMemo(
+    () => [...todayData.south, ...todayData.central, ...todayData.north],
+    [todayData]
+  );
+  const activeDateStr = useMemo(() => formatDate(new Date()), []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('minhluan_theme');
+      const isDark = saved === 'dark';
+      setDark(isDark);
+      document.documentElement.classList.toggle('dark', isDark);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    try {
+      localStorage.setItem('minhluan_theme', next ? 'dark' : 'light');
+      document.documentElement.classList.toggle('dark', next);
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleSound = () => {
+    const nextState = !soundEnabled;
+    setSoundEnabled(nextState);
+    audioSynth.enabled = nextState;
+    if (nextState) {
+      audioSynth.playDrawChime();
+    }
+  };
+
+  const handleSelectRegionTab = (tab: 'all' | 'south' | 'central' | 'north' | 'vietlott') => {
+    if (tab === 'all') router.push('/');
+    else if (tab === 'south') router.push('/#xsmn');
+    else if (tab === 'central') router.push('/#xsmt');
+    else if (tab === 'north') router.push('/#xsmb');
+    else router.push('/#vietlott');
+  };
 
   return (
     <div className={`min-h-screen bg-background text-foreground ${dark ? 'dark' : ''}`}>
-      <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 lg:px-8">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded-lg p-2 hover:bg-muted lg:hidden"
-              aria-label="Mở menu"
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-            </button>
-            <Link href="/" className="flex items-center gap-2.5 font-black text-red-600 dark:text-red-500">
-              <span className="grid size-9 place-items-center rounded-xl bg-red-600 text-white shadow-sm">
-                <Trophy className="size-5" />
-              </span>
-              <span className="text-xl tracking-tight">XSKT Minh Ngọc</span>
-            </Link>
-          </div>
+      <MinhLuanHeader
+        activeDateStr={activeDateStr}
+        allProvinces={allProvinces}
+        activeRegionTab="all"
+        onSelectRegionTab={handleSelectRegionTab}
+        dark={dark}
+        onToggleDark={toggleDark}
+        soundEnabled={soundEnabled}
+        onToggleSound={toggleSound}
+        onOpenCheckerModal={() => setCheckerOpen(true)}
+      />
 
-          <nav className="hidden items-center gap-1 lg:flex" aria-label="Menu chính">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-muted"
-              >
-                {item.icon ? <item.icon className="size-4 text-red-500" /> : null}
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+      <main className="mx-auto max-w-[1260px] px-4 py-6 lg:px-6">{children}</main>
 
-          <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 text-xs font-bold text-red-600 sm:flex dark:text-red-400">
-              <Radio className="size-3 animate-pulse text-red-600" />
-              Trực tiếp 16h15 - 18h30
-            </div>
-            <button
-              type="button"
-              onClick={() => setDark((value) => !value)}
-              className="rounded-lg border p-2 hover:bg-muted"
-              aria-label="Giao diện tối/sáng"
-            >
-              {dark ? <Sun className="size-5 text-amber-400" /> : <Moon className="size-5" />}
-            </button>
-          </div>
-        </div>
+      <TicketCheckerModal
+        isOpen={checkerOpen}
+        onClose={() => setCheckerOpen(false)}
+        availableResults={allProvinces}
+      />
 
-        {menuOpen ? (
-          <div className="border-t bg-card px-4 py-3 lg:hidden">
-            <div className="grid gap-1 text-sm font-semibold">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2 rounded-lg p-2.5 hover:bg-muted"
-                >
-                  {item.icon ? <item.icon className="size-4 text-red-500" /> : null}
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </header>
-
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8 lg:px-8">{children}</main>
-
-      <footer className="border-t py-6 text-center text-xs text-muted-foreground">
-        {siteConfig.disclaimer}
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

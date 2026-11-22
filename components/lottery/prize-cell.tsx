@@ -8,9 +8,16 @@ interface PrizeCellProps {
   mode: 'full' | 'last2' | 'last3';
   highlightDigit: number | null;
   isSpecial?: boolean;
+  isEighth?: boolean;
 }
 
-export function PrizeCell({ numberStr, mode, highlightDigit, isSpecial = false }: PrizeCellProps) {
+export function PrizeCell({
+  numberStr,
+  mode,
+  highlightDigit,
+  isSpecial = false,
+  isEighth = false,
+}: PrizeCellProps) {
   const displayVal = formatPrizeNumber(numberStr, mode);
 
   if (!displayVal) {
@@ -22,13 +29,17 @@ export function PrizeCell({ numberStr, mode, highlightDigit, isSpecial = false }
 
   return (
     <span
-      className={`font-mono tracking-wider tabular-nums transition-all ${isSpecial
-        ? 'text-lg sm:text-xl font-black text-red-600 dark:text-red-400'
-        : 'text-sm sm:text-base font-bold text-foreground'
-        } ${hasHighlight
-          ? 'bg-amber-300 text-black dark:bg-amber-400 dark:text-black px-1.5 py-0.5 rounded shadow-sm scale-105 inline-block'
+      className={`font-mono tracking-wider tabular-nums transition-colors ${
+        isSpecial
+          ? 'text-xl sm:text-2xl font-extrabold text-red-600 dark:text-red-400'
+          : isEighth
+          ? 'text-base sm:text-lg font-extrabold text-red-600 dark:text-red-400'
+          : 'text-sm sm:text-base font-bold text-foreground'
+      } ${
+        hasHighlight
+          ? 'bg-amber-300 text-neutral-950 dark:bg-amber-400 dark:text-neutral-950 px-1.5 py-0.5 rounded shadow-2xs inline-block'
           : ''
-        }`}
+      }`}
     >
       {displayVal}
     </span>

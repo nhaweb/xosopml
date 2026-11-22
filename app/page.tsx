@@ -1,93 +1,67 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import {
-  CalendarDays,
-  Menu,
-  Moon,
-  Sun,
-  Trophy,
-  X,
-  BookOpen,
-  TrendingUp,
-  Radio,
-  Flame,
-  Search,
-  Volume2,
-  VolumeX,
-  Dices,
-  ScrollText,
-  Printer,
-  BarChart3,
-  Table,
-} from 'lucide-react';
+import { Check, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import { getLotteryResults } from '@/lib/mock-lottery-data';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
-import { HeroPromoSection } from '@/components/lottery/hero-promo-section';
 import { AiLotoSummaryWidget } from '@/components/lottery/ai-loto-summary-widget';
 import { LiveCountdownBanner } from '@/components/lottery/live-countdown-banner';
 import { WeeklyScheduleMatrix } from '@/components/lottery/weekly-schedule-matrix';
-import { ProvinceQuickStrip } from '@/components/lottery/province-quick-strip';
-import { QuickTicketCheckerBar } from '@/components/lottery/quick-ticket-checker-bar';
 import { TicketCheckerModal } from '@/components/lottery/ticket-checker-modal';
 import { VietlottKenoWidget } from '@/components/lottery/vietlott-keno-widget';
+import { MinhLuanHeader } from '@/components/minhluan/minhluan-header';
+import { RotatingPromoBanner } from '@/components/minhluan/rotating-promo-banner';
+import { Stats3ColTable } from '@/components/minhluan/stats-3col-table';
+import { LeftSidebar, RightSidebar } from '@/components/minhluan/sidebars';
+import { SiteFooter } from '@/components/site/site-footer';
 import { audioSynth } from '@/lib/audio-synthesizer';
-import { formatDate, shortDate } from '@/lib/format';
-import { siteConfig } from '@/config/site';
-
-const navItems = [
-  { label: 'Trang chủ', href: '#top' },
-  { label: 'Mua Vé Online', href: '/mua-ve-online', icon: Search },
-  { label: 'Dashboard', href: '/dashboard', icon: Trophy },
-  { label: 'XSMN', href: '#xsmn' },
-  { label: 'XSMT', href: '#xsmt' },
-  { label: 'XSMB', href: '#xsmb' },
-  { label: 'Quay Thử', href: '/quay-thu', icon: Dices },
-  { label: 'Sớ Đầu Đuôi', href: '/so-dau-duoi', icon: ScrollText },
-  { label: 'Tần Suất', href: '/thong-ke/tan-suat', icon: BarChart3 },
-  { label: 'Bảng ĐB', href: '/thong-ke/giai-dac-biet', icon: Table },
-  { label: 'Sổ Mơ', href: '/so-mo', icon: BookOpen },
-  { label: 'Lô Gan', href: '/thong-ke/lo-gan', icon: TrendingUp },
-  { label: 'In Vé Dò', href: '/in-ve-do', icon: Printer },
-];
+import { formatDate } from '@/lib/format';
 
 export default function Page() {
   const [dark, setDark] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [checkerOpen, setCheckerOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [selectedDayOffset, setSelectedDayOffset] = useState(0);
+  const [activeDate, setActiveDate] = useState<Date>(() => new Date());
+  const [priorityRegion, setPriorityRegion] = useState<'south' | 'north' | 'central'>('south');
+  const [activeRegionTab, setActiveRegionTab] = useState<'all' | 'south' | 'central' | 'north' | 'vietlott'>('all');
+  const [showYesterdayFull, setShowYesterdayFull] = useState(true);
 
-  // Tính ngày được chọn
-  const activeDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - selectedDayOffset);
-    return d;
-  }, [selectedDayOffset]);
-
+  // Dữ liệu ngày đang chọn (mặc định Hôm nay)
   const lotteryData = useMemo(() => getLotteryResults(activeDate), [activeDate]);
 
-  // Danh sách toàn bộ các đài mở thưởng trong ngày để dò vé
+  // Dữ liệu ngày trước đó (Hôm qua so với ngày đang chọn)
+  const prevDate = useMemo(() => {
+    const d = new Date(activeDate);
+    d.setDate(d.getDate() - 1);
+    return d;
+  }, [activeDate]);
+  const prevLotteryData = useMemo(() => getLotteryResults(prevDate), [prevDate]);
+
   const allProvinces = useMemo(
     () => [...lotteryData.south, ...lotteryData.central, ...lotteryData.north],
     [lotteryData]
   );
 
-  const quickDates = [0, 1, 2, 3, 4, 5, 6].map((offset) => {
-    const d = new Date();
-    d.setDate(d.getDate() - offset);
-    return {
-      offset,
-      label: offset === 0 ? 'Hôm nay' : offset === 1 ? 'Hôm qua' : shortDate(d),
-      fullDate: formatDate(d),
-    };
-  });
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('minhluan_theme');
+      const isDark = saved === 'dark';
+      setDark(isDark);
+      document.documentElement.classList.toggle('dark', isDark);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const toggleDark = () => {
-    setDark(!dark);
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', !dark);
+    const next = !dark;
+    setDark(next);
+    try {
+      localStorage.setItem('minhluan_theme', next ? 'dark' : 'light');
+      document.documentElement.classList.toggle('dark', next);
+    } catch {
+      // ignore
     }
   };
 
@@ -100,266 +74,291 @@ export default function Page() {
     }
   };
 
+  const handleSelectRegionTab = (tab: 'all' | 'south' | 'central' | 'north' | 'vietlott') => {
+    setActiveRegionTab(tab);
+    if (tab === 'south' || tab === 'central' || tab === 'north') {
+      setPriorityRegion(tab);
+    }
+  };
+
+  const isToday = useMemo(() => {
+    const now = new Date();
+    return (
+      activeDate.getFullYear() === now.getFullYear() &&
+      activeDate.getMonth() === now.getMonth() &&
+      activeDate.getDate() === now.getDate()
+    );
+  }, [activeDate]);
+
+  // Sắp xếp thứ tự 3 miền theo miền ưu tiên
+  const orderedRegions = useMemo(() => {
+    const items = [
+      {
+        key: 'south' as const,
+        id: 'xsmn',
+        title: `KẾT QUẢ XỔ SỐ MIỀN NAM - ${lotteryData.formattedDate}`,
+        regionCode: '18 Giải',
+        drawTime: '16:15',
+        results: lotteryData.south,
+      },
+      {
+        key: 'central' as const,
+        id: 'xsmt',
+        title: `KẾT QUẢ XỔ SỐ MIỀN TRUNG - ${lotteryData.formattedDate}`,
+        regionCode: '18 Giải',
+        drawTime: '17:15',
+        results: lotteryData.central,
+      },
+      {
+        key: 'north' as const,
+        id: 'xsmb',
+        title: `KẾT QUẢ XỔ SỐ MIỀN BẮC - ${lotteryData.formattedDate}`,
+        regionCode: '27 Giải',
+        drawTime: '18:15',
+        results: lotteryData.north,
+      },
+    ];
+
+    if (activeRegionTab === 'south' || activeRegionTab === 'central' || activeRegionTab === 'north') {
+      return items.filter((item) => item.key === activeRegionTab);
+    }
+
+    const prioritized = items.find((i) => i.key === priorityRegion);
+    const others = items.filter((i) => i.key !== priorityRegion);
+    return prioritized ? [prioritized, ...others] : items;
+  }, [lotteryData, priorityRegion, activeRegionTab]);
+
+  const activeDateFormatted = formatDate(activeDate);
+  const dateSlug = `${activeDate.getFullYear()}${String(activeDate.getMonth() + 1).padStart(2, '0')}${String(activeDate.getDate()).padStart(2, '0')}`;
+
   return (
     <div id="top" className={`min-h-screen bg-background text-foreground ${dark ? 'dark' : ''}`}>
-      {/* Top Header */}
-      <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 lg:px-8">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded-lg p-2 hover:bg-muted lg:hidden"
-              aria-label="Mở menu"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-            </button>
-            <a href="/" className="flex items-center gap-2.5 font-black text-red-600 dark:text-red-500">
-              <span className="grid size-9 place-items-center rounded-xl bg-red-600 text-white shadow-sm">
-                <Trophy className="size-5" />
-              </span>
-              <span className="text-xl tracking-tight">XSKT Minh Ngọc</span>
-            </a>
+      {/* Header chuẩn Minh Ngọc / Minh Luân (#1, #2, #3 + Red Nav Bar) */}
+      <MinhLuanHeader
+        activeDateStr={activeDateFormatted}
+        allProvinces={allProvinces}
+        activeRegionTab={activeRegionTab}
+        onSelectRegionTab={handleSelectRegionTab}
+        dark={dark}
+        onToggleDark={toggleDark}
+        soundEnabled={soundEnabled}
+        onToggleSound={toggleSound}
+        onOpenCheckerModal={() => setCheckerOpen(true)}
+      />
+
+      {/* Main 3-Column Minh Ngọc Layout */}
+      <main className="mx-auto max-w-[1260px] px-2.5 py-4 lg:px-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[215px_minmax(0,1fr)_235px]">
+          {/* CỘT TRÁI (#4, #7, #8 & Section 2 #1, #2, #3) */}
+          <div className="order-2 lg:order-1">
+            <LeftSidebar
+              activeDate={activeDate}
+              onSelectDate={(d) => setActiveDate(d)}
+              lotteryData={lotteryData}
+            />
           </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden items-center gap-1 lg:flex" aria-label="Menu chính">
-            {navItems.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-muted transition-colors"
-              >
-                {item.icon && <item.icon className="size-4 text-red-500" />}
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          {/* CỘT GIỮA (#9 ở vị trí #5 -> #10 KQXS Hôm nay & Hôm qua -> #5 Bảng Thống Kê 3 Cột) */}
+          <div className="order-1 lg:order-2 min-w-0">
+            {/* #9 ĐẶT Ở VỊ TRÍ SỐ 5: Banner thay đổi 2 dòng chữ MUA VÉ SỐ ONLINE <-> ĐĂNG KÝ THÀNH VIÊN NGAY */}
+            <RotatingPromoBanner />
 
-          {/* Right Controls */}
-          <div className="flex items-center gap-2">
-            {/* Nút Dò vé số nhanh */}
-            <button
-              type="button"
-              onClick={() => setCheckerOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition-all hover:scale-105"
-            >
-              <Search className="size-3.5" /> Dò Vé Nhanh
-            </button>
+            {/* Live Countdown Bar gọn gàng */}
+            <LiveCountdownBanner />
 
-            {/* Nút Âm thanh chuông báo */}
-            <button
-              type="button"
-              onClick={toggleSound}
-              className={`rounded-lg border p-2 transition-colors ${
-                soundEnabled ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40' : 'text-muted-foreground hover:bg-muted'
-              }`}
-              title={soundEnabled ? 'Chuông báo xổ số: Bật' : 'Chuông báo xổ số: Tắt'}
-            >
-              {soundEnabled ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
-            </button>
+            {/* #10 MOVE LÊN NGAY DƯỚI #9: Tiêu đề KQXS & Bộ chọn miền ưu tiên */}
+            <div id="kqxs-hom-nay" className="mb-4 rounded-xl border bg-card p-3.5 text-center shadow-2xs">
+              <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-foreground">
+                KẾT QUẢ XỔ SỐ KIẾN THIẾT {lotteryData.formattedDate}
+              </h1>
 
-            {/* Nút Dark/Light mode */}
-            <button
-              type="button"
-              onClick={toggleDark}
-              className="rounded-lg border p-2 hover:bg-muted transition-colors"
-              aria-label="Giao diện tối/sáng"
-            >
-              {dark ? <Sun className="size-5 text-amber-400" /> : <Moon className="size-5" />}
-            </button>
-          </div>
-        </div>
+              {/* Chọn miền ưu tiên (giống Minh Ngọc) */}
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs font-bold">
+                <span className="text-muted-foreground">Chọn miền ưu tiên:</span>
+                {[
+                  { id: 'south', label: 'Miền Nam' },
+                  { id: 'north', label: 'Miền Bắc' },
+                  { id: 'central', label: 'Miền Trung' },
+                ].map((reg) => (
+                  <label key={reg.id} className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="priorityRegion"
+                      checked={priorityRegion === reg.id}
+                      onChange={() => {
+                        setPriorityRegion(reg.id as any);
+                        setActiveRegionTab('all');
+                      }}
+                      className="accent-red-600"
+                    />
+                    <span className={priorityRegion === reg.id ? 'text-red-600 dark:text-red-400 font-extrabold' : ''}>
+                      {reg.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
 
-        {/* Mobile Navigation Dropdown */}
-        {menuOpen && (
-          <div className="border-t bg-card px-4 py-3 lg:hidden">
-            <div className="grid gap-1 font-semibold text-sm">
-              {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2 rounded-lg p-2.5 hover:bg-muted"
+              {/* Nút chuyển nhanh Hôm nay / Hôm qua */}
+              <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveDate(new Date())}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-extrabold transition-all ${
+                    isToday
+                      ? 'bg-[#b80c0c] text-white shadow-xs'
+                      : 'border bg-muted/50 text-foreground hover:bg-muted'
+                  }`}
                 >
-                  {item.icon && <item.icon className="size-4 text-red-500" />}
-                  {item.label}
-                </Link>
-              ))}
+                  <span className={`size-2 rounded-full ${isToday ? 'bg-amber-300 animate-pulse' : 'bg-red-500'}`} />
+                  Hôm nay ({formatDate(new Date())})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const y = new Date();
+                    y.setDate(y.getDate() - 1);
+                    setActiveDate(y);
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-extrabold transition-all ${
+                    !isToday
+                      ? 'bg-[#b80c0c] text-white shadow-xs'
+                      : 'border bg-muted/50 text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <CalendarDays className="size-3.5" />
+                  Hôm qua ({prevLotteryData.formattedDate})
+                </button>
+              </div>
+
+              {/* Dòng trạng thái xanh chuẩn Minh Ngọc */}
+              <div className="mt-2.5 flex items-center justify-center gap-1.5 rounded-md border border-blue-200/70 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
+                <Check className="size-4 text-emerald-600 stroke-[3]" />
+                <span>
+                  Xổ Số {isToday ? 'hôm nay' : `ngày ${lotteryData.formattedDate}`} đã cập nhật »{' '}
+                  <Link href={`/ngay/${dateSlug}`} className="underline hover:text-red-600">
+                    Xem thêm trang kết quả xổ số theo ngày!...
+                  </Link>
+                </span>
+              </div>
+            </div>
+
+            {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (3 MIỀN) */}
+            {activeRegionTab !== 'vietlott' && (
+              <div className="flex flex-col gap-6">
+                {orderedRegions.map((board) => (
+                  <RegionLotteryBoard
+                    key={board.id}
+                    id={board.id}
+                    title={board.title}
+                    regionCode={board.regionCode}
+                    drawTime={board.drawTime}
+                    dateStr={lotteryData.formattedDate}
+                    results={board.results}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* KHỐI HIỂN THỊ KẾT QUẢ XỔ SỐ NGÀY TRƯỚC ĐÓ (HÔM QUA) */}
+            {activeRegionTab !== 'vietlott' && (
+              <section className="mt-8 overflow-hidden rounded-xl border-2 border-amber-500/40 bg-card shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowYesterdayFull((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 bg-gradient-to-r from-amber-500/15 via-red-500/10 to-amber-500/15 px-4 py-3 text-left transition-colors hover:bg-amber-500/20"
+                >
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="size-5 text-red-600" />
+                    <div>
+                      <h2 className="text-sm sm:text-base font-black uppercase text-foreground">
+                        KẾT QUẢ XỔ SỐ NGÀY TRƯỚC ĐÓ ({prevLotteryData.formattedDate})
+                      </h2>
+                      <p className="text-[11px] text-muted-foreground">
+                        Đầy đủ 3 miền Nam · Trung · Bắc ngày hôm qua để bạn đối chiếu nhanh
+                      </p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-lg border bg-background px-2.5 py-1 text-xs font-bold">
+                    {showYesterdayFull ? (
+                      <>
+                        Thu gọn <ChevronUp className="size-4" />
+                      </>
+                    ) : (
+                      <>
+                        Mở xem <ChevronDown className="size-4" />
+                      </>
+                    )}
+                  </span>
+                </button>
+
+                {showYesterdayFull && (
+                  <div className="space-y-6 p-3 sm:p-4">
+                    <RegionLotteryBoard
+                      id="xsmn-yesterday"
+                      title={`XSMN Hôm Qua — ${prevLotteryData.formattedDate}`}
+                      regionCode="18 Giải"
+                      drawTime="16:15"
+                      dateStr={prevLotteryData.formattedDate}
+                      results={prevLotteryData.south}
+                    />
+                    <RegionLotteryBoard
+                      id="xsmt-yesterday"
+                      title={`XSMT Hôm Qua — ${prevLotteryData.formattedDate}`}
+                      regionCode="18 Giải"
+                      drawTime="17:15"
+                      dateStr={prevLotteryData.formattedDate}
+                      results={prevLotteryData.central}
+                    />
+                    <RegionLotteryBoard
+                      id="xsmb-yesterday"
+                      title={`XSMB Hôm Qua — ${prevLotteryData.formattedDate}`}
+                      regionCode="27 Giải"
+                      drawTime="18:15"
+                      dateStr={prevLotteryData.formattedDate}
+                      results={prevLotteryData.north}
+                    />
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* #5 MOVE XUỐNG DƯỚI: Bảng Thống Kê 3 Cột (ĐÃ BỎ CỘT LỊCH XỔ SỐ + IN ĐẬM TITLE) */}
+            <div className="mt-8">
+              <Stats3ColTable lotteryData={lotteryData} />
+            </div>
+
+            {/* AI Loto Intelligence Hub tổng hợp Tần suất & Gan cực đại */}
+            <div className="mt-6">
+              <AiLotoSummaryWidget />
+            </div>
+
+            {/* Khối Điện toán Vietlott & Keno */}
+            <div id="vietlott" className="mt-6">
+              <VietlottKenoWidget />
+            </div>
+
+            {/* Lịch Mở Thưởng 3 Miền Trong Tuần */}
+            <div id="lich-mo-thuong" className="mt-6">
+              <WeeklyScheduleMatrix />
             </div>
           </div>
-        )}
-      </header>
 
-      {/* Main Content Area */}
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8 lg:px-8">
-        {/* Section 1: Hero Promo Banner (Logo Nắm bắt cơ hội | Vận may mở lối | Quay thử) */}
-        <HeroPromoSection />
-
-        {/* Live Countdown & Direct Status Bar */}
-        <LiveCountdownBanner />
-
-        {/* Thanh Cuộn Nhanh 63 Đài Tỉnh */}
-        <ProvinceQuickStrip />
-
-        {/* Chuyển đổi nhanh Hôm Nay / Hôm Qua (3 Miền) & Bộ Chọn Ngày */}
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
-              <Flame className="size-4" />
-              Bảng Kết Quả Nhanh Minh Ngọc
-            </div>
-            <h1 className="mt-1 text-2xl sm:text-4xl font-black tracking-tight text-foreground">
-              Kết Quả Xổ Số {lotteryData.formattedDate}
-            </h1>
-            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              Cập nhật bảng vàng kết quả 3 miền, thống kê đầu đuôi loto 0 đến 9 và sổ mơ chính xác.
-            </p>
-
-            {/* Hai nút chuyển đổi nổi bật Hôm nay / Hôm qua 3 miền theo phản hồi khách hàng */}
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedDayOffset(0)}
-                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition-all shadow-xs ${
-                  selectedDayOffset === 0
-                    ? 'bg-red-600 text-white scale-105 shadow-md ring-2 ring-red-400'
-                    : 'border bg-card text-foreground hover:bg-muted'
-                }`}
-              >
-                <span className="size-2 rounded-full bg-amber-300 animate-ping inline-block" />
-                🔴 KQXS Hôm Nay (3 Miền)
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedDayOffset(1)}
-                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition-all shadow-xs ${
-                  selectedDayOffset === 1
-                    ? 'bg-red-600 text-white scale-105 shadow-md ring-2 ring-red-400'
-                    : 'border bg-card text-foreground hover:bg-muted'
-                }`}
-              >
-                📅 KQXS Hôm Qua (3 Miền)
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Date Selector */}
-          <div className="rounded-xl border bg-card p-2 shadow-xs">
-            <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-bold text-muted-foreground">
-              <CalendarDays className="size-3.5 text-primary" />
-              Xem ngày khác:
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {quickDates.map((item) => {
-                const isActive = selectedDayOffset === item.offset;
-                return (
-                  <button
-                    key={item.offset}
-                    type="button"
-                    onClick={() => setSelectedDayOffset(item.offset)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
-                      isActive
-                        ? 'bg-red-600 text-white shadow-xs scale-105'
-                        : 'bg-muted/60 hover:bg-muted text-foreground'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
+          {/* CỘT PHẢI (#6 Đổi Số Trúng Minh Luân, Section 2 #4 Tin tức, Section 2 #5 YouTube Logo @xosominhluan) */}
+          <div className="order-3">
+            <RightSidebar />
           </div>
         </div>
-
-        {/* Thanh Dò Vé Nhanh Tại Chỗ */}
-        <QuickTicketCheckerBar provinces={allProvinces} />
-
-        {/* 3 Regional Lottery Result Boards */}
-        <div className="flex flex-col gap-8">
-          {/* 1. Xổ số Miền Nam */}
-          <RegionLotteryBoard
-            id="xsmn"
-            title="XSMN · Xổ Số Miền Nam"
-            regionCode="18 Giải"
-            drawTime="16:15"
-            dateStr={lotteryData.formattedDate}
-            results={lotteryData.south}
-          />
-
-          {/* 2. Xổ số Miền Trung */}
-          <RegionLotteryBoard
-            id="xsmt"
-            title="XSMT · Xổ Số Miền Trung"
-            regionCode="18 Giải"
-            drawTime="17:15"
-            dateStr={lotteryData.formattedDate}
-            results={lotteryData.central}
-          />
-
-          {/* 3. Xổ số Miền Bắc */}
-          <RegionLotteryBoard
-            id="xsmb"
-            title="XSMB · Xổ Số Miền Bắc"
-            regionCode="27 Giải"
-            drawTime="18:15"
-            dateStr={lotteryData.formattedDate}
-            results={lotteryData.north}
-          />
-        </div>
-
-        {/* Trung Tâm Phân Tích Lô Tô & AI Intelligence Hub (Gan cực đại, Tần suất, Cầu số) */}
-        <div className="mt-8">
-          <AiLotoSummaryWidget />
-        </div>
-
-        {/* Lịch Mở Thưởng 3 Miền Trong Tuần */}
-        <WeeklyScheduleMatrix />
-
-        {/* Khối Điện toán Vietlott & Keno */}
-        <VietlottKenoWidget />
-
-        {/* Disclaimer & SEO Info */}
-        <section className="mt-10 rounded-2xl border bg-muted/20 p-5 text-xs leading-relaxed text-muted-foreground">
-          <h2 className="text-sm font-bold text-foreground mb-1">
-            Lưu ý về Kết quả Xổ Số Kiến Thiết (XSKT)
-          </h2>
-          <p>{siteConfig.disclaimer}</p>
-          <p className="mt-2 font-medium">
-            Lịch quay cố định: Miền Nam 16h15, Miền Trung 17h15, Miền Bắc 18h15 hàng ngày.
-          </p>
-        </section>
       </main>
 
-      {/* Modal Dò Vé Số Nhanh */}
+      {/* Modal Dò Vé Số Nâng Cao */}
       <TicketCheckerModal
         isOpen={checkerOpen}
         onClose={() => setCheckerOpen(false)}
         availableResults={allProvinces}
       />
 
-      {/* Footer */}
-      <footer className="mt-12 border-t bg-card py-8 text-center text-xs text-muted-foreground">
-        <div className="mx-auto max-w-7xl px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="font-semibold text-foreground">
-            © 2026 XSKT Minh Ngọc Clone — Dữ liệu mẫu phục vụ phát triển
-          </p>
-          <div className="flex flex-wrap gap-4 justify-center">
-            <a href="#xsmn" className="hover:underline">XSMN</a>
-            <a href="#xsmt" className="hover:underline">XSMT</a>
-            <a href="#xsmb" className="hover:underline">XSMB</a>
-            <Link href="/mua-ve-online" className="hover:underline font-bold text-red-600">Mua Vé Online</Link>
-            <Link href="/dashboard" className="hover:underline font-bold text-amber-600">User Dashboard</Link>
-            <Link href="/quay-thu" className="hover:underline">Quay Thử</Link>
-            <Link href="/so-dau-duoi" className="hover:underline">Sớ Đầu Đuôi</Link>
-            <Link href="/thong-ke/tan-suat" className="hover:underline">Tần Suất</Link>
-            <Link href="/thong-ke/giai-dac-biet" className="hover:underline">Bảng ĐB</Link>
-            <Link href="/so-mo" className="hover:underline">Sổ Mơ</Link>
-            <Link href="/thong-ke/lo-gan" className="hover:underline">Lô Gan</Link>
-            <Link href="/in-ve-do" className="hover:underline">In Vé Dò</Link>
-          </div>
-        </div>
-      </footer>
+      {/* Footer 4 Cột Nền Tối Chuẩn Spec (THƯƠNG HIỆU | TRA CỨU NHANH | THÔNG TIN & CHÍNH SÁCH | KẾT NỐI) */}
+      <SiteFooter />
     </div>
   );
 }

@@ -24,9 +24,9 @@ export default function BangDacBietPage() {
     <SiteFrame>
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
             <Table className="size-4" />
-            Thống Kê Giải Đặc Biệt Minh Ngọc
+            Thống Kê Giải Đặc Biệt Minh Luân
           </div>
           <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl text-foreground">
             Bảng Đặc Biệt Năm {selectedYear}

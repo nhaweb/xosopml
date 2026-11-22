@@ -58,7 +58,7 @@ export function WeeklyScheduleMatrix() {
                   >
                     <span className="block text-sm font-extrabold">{d.label}</span>
                     {isToday && (
-                      <span className="inline-block mt-0.5 rounded-full bg-red-600 text-white px-2 py-0.2 text-[10px] font-bold">
+                      <span className="inline-block mt-0.5 rounded-full bg-red-600 text-white px-2 py-0.5 text-[10px] font-bold">
                         Hôm nay
                       </span>
                     )}

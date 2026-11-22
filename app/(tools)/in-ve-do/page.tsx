@@ -123,7 +123,7 @@ export default function InVeDoPage() {
             Ngày mở thưởng: {formatDate(activeDate)}
           </p>
           <p className="text-[11px] text-gray-700 italic">
-            (Vé dò in tự động từ XSKT Minh Ngọc · www.xosominhngoc.net.vn)
+            (Vé dò in tự động từ XSKT Minh Luân · xosominhluan.vn)
           </p>
         </div>
 
@@ -181,8 +181,8 @@ export default function InVeDoPage() {
 
         {/* Print Footer */}
         <div className="mt-4 border-t-2 border-black pt-2 flex items-center justify-between text-[11px] text-gray-700">
-          <span>Đại lý vé số kính chúc quý khách vạn sự may mắn!</span>
-          <span>Dò lại vé tại: https://xosominhngoc.net.vn</span>
+          <span>Đại lý vé số Minh Luân kính chúc quý khách vạn sự may mắn!</span>
+          <span>Dò lại vé tại: https://xosominhluan.vn</span>
         </div>
       </div>
     </SiteFrame>
