@@ -14,25 +14,60 @@ import {
   Sparkles,
   UserPlus,
   Coins,
-  Trophy,
   ShieldCheck,
 } from 'lucide-react';
 import { DayLotteryData } from '@/types/lottery';
-import { PROVINCES } from '@/config/lottery-provinces';
+import { PROVINCES, sortProvincesCanonical } from '@/config/lottery-provinces';
 import { siteConfig } from '@/config/site';
+
+export interface SidebarLookupQuery {
+  mode: 'region' | 'province' | 'headtail';
+  region: 'mien-nam' | 'mien-trung' | 'mien-bac';
+  provinceId: string;
+}
 
 interface LeftSidebarProps {
   activeDate: Date;
   onSelectDate: (date: Date) => void;
   lotteryData: DayLotteryData;
+  onLookupResult?: (query: SidebarLookupQuery) => void;
 }
 
 const WEEKDAYS_VN = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
 
-export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSidebarProps) {
+function getVietnamHour(d: Date): number {
+  try {
+    const vnHourStr = d.toLocaleString('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: 'numeric',
+      hour12: false,
+    });
+    const parsed = parseInt(vnHourStr, 10);
+    return Number.isNaN(parsed) ? d.getHours() : parsed % 24;
+  } catch {
+    return d.getHours();
+  }
+}
+
+export function LeftSidebar({
+  activeDate,
+  onSelectDate,
+  lotteryData,
+  onLookupResult,
+}: LeftSidebarProps) {
   const router = useRouter();
   const [calMonth, setCalMonth] = useState<number>(activeDate.getMonth());
   const [calYear, setCalYear] = useState<number>(activeDate.getFullYear());
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  React.useEffect(() => {
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Từ sau 16:00 (4h00 chiều) giờ VN trở đi, tự động chuyển sang dấu tích xanh ✓ (mới / đã có kết quả)
+  const isAfter16h = getVietnamHour(now) >= 16;
 
   // State cho hộp Tra cứu (Section 2 #1)
   const [lookupMode, setLookupMode] = useState<'region' | 'province' | 'headtail'>('region');
@@ -74,6 +109,14 @@ export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSideb
 
   const handleLookupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (onLookupResult) {
+      onLookupResult({
+        mode: lookupMode,
+        region: lookupRegion as 'mien-nam' | 'mien-trung' | 'mien-bac',
+        provinceId: lookupProvince,
+      });
+      return;
+    }
     if (lookupMode === 'headtail') {
       router.push('/so-dau-duoi');
     } else if (lookupMode === 'province') {
@@ -102,10 +145,10 @@ export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSideb
         </div>
         <div className="divide-y divide-border/60 p-2 text-[12px]">
           {[
-            { label: 'Trực Tiếp Xổ Số Miền Nam', href: '#xsmn', live: true },
-            { label: 'Trực Tiếp Xổ Số Miền Bắc', href: '#xsmb', live: true },
-            { label: 'Trực Tiếp Xổ Số Miền Trung', href: '#xsmt', live: true },
-            { label: 'Trực Tiếp Xổ Số Vietlott', href: '#vietlott', live: true },
+            { label: 'Trực Tiếp Xổ Số Miền Nam', href: '#xsmn' },
+            { label: 'Trực Tiếp Xổ Số Miền Bắc', href: '#xsmb' },
+            { label: 'Trực Tiếp Xổ Số Miền Trung', href: '#xsmt' },
+            { label: 'Trực Tiếp Xổ Số Vietlott', href: '#vietlott' },
           ].map((item) => (
             <a
               key={item.label}
@@ -113,7 +156,13 @@ export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSideb
               className="flex items-center justify-between py-1.5 font-semibold text-foreground hover:text-red-600"
             >
               <span>▸ {item.label}</span>
-              <Check className="size-4 text-emerald-600 stroke-[3]" />
+              {isAfter16h ? (
+                <Check className="size-4 shrink-0 text-emerald-600 stroke-[3]" aria-label="Mới - Đã có kết quả" />
+              ) : (
+                <span className="shrink-0 text-[10px] font-bold tracking-tighter text-slate-400" title="Đang chờ mở thưởng">
+                  ● ● ●
+                </span>
+              )}
             </a>
           ))}
           <Link
@@ -262,7 +311,7 @@ export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSideb
               ▼ Kết quả xổ số Miền Nam
             </a>
             <ul className="mt-1 space-y-1 pl-2">
-              {lotteryData.south.map((p) => (
+              {sortProvincesCanonical(lotteryData.south).map((p) => (
                 <li key={p.provinceId} className="flex items-center justify-between">
                   <Link
                     href={`/ket-qua-xo-so/mien-nam/${p.provinceId}.html`}
@@ -382,7 +431,7 @@ export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSideb
         <ul className="space-y-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400">
           <li>
             <Link href="/dashboard" className="hover:underline">
-              ▸ Hướng dẫn đăng ký thành viên, in vé dò
+              ▸ Hướng dẫn đăng ký thành viên
             </Link>
           </li>
           <li>
@@ -408,30 +457,55 @@ export function LeftSidebar({ activeDate, onSelectDate, lotteryData }: LeftSideb
         </ul>
       </div>
 
-      {/* Section 2 #3: Banner NHIỀU TIỆN ÍCH - ĐĂNG KÝ THÀNH VIÊN NGAY (xuống hàng) */}
+      {/* Section 2 #3: Banner NHIỀU TIỆN ÍCH - ĐĂNG KÝ THÀNH VIÊN NGAY (kích thước bề thế cân xứng với thẻ Đổi Số Trúng) */}
       <Link
         href="/dashboard"
-        className="group relative block overflow-hidden rounded-xl border-2 border-amber-400/90 bg-gradient-to-b from-[#a80808] via-[#880000] to-[#5e0000] p-4 text-center text-white shadow-md transition-transform hover:scale-[1.02]"
+        className="group relative flex min-h-[372px] flex-col justify-between overflow-hidden rounded-xl border-2 border-amber-400/90 bg-gradient-to-b from-[#b90c0c] via-[#8f0000] to-[#520000] px-3.5 py-5 text-center text-white shadow-md transition-transform hover:scale-[1.01]"
       >
         <div className="pointer-events-none absolute -top-3 -right-3 opacity-15">
-          <Coins className="size-16 text-amber-300" />
+          <Coins className="size-20 text-amber-300" />
+        </div>
+        <div className="pointer-events-none absolute -bottom-4 -left-4 opacity-10">
+          <Sparkles className="size-20 text-amber-200" />
         </div>
 
         <div className="relative">
-          <div className="mx-auto mb-2 inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-300">
-            <Sparkles className="size-3" /> Hội Viên Minh Luân
+          <div className="mx-auto inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-200">
+            <Sparkles className="size-3.5 text-amber-300" /> Hội Viên Minh Luân
           </div>
-          <div className="text-lg font-extrabold uppercase leading-snug tracking-wide text-amber-300">
+          <div className="mt-3 text-xl font-black uppercase leading-tight tracking-wide text-amber-300 drop-shadow-xs">
             NHIỀU TIỆN ÍCH
           </div>
-          <div className="mt-1 text-base font-extrabold uppercase leading-snug tracking-wide text-white">
+          <div className="mt-1 text-base font-black uppercase leading-snug tracking-wide text-white drop-shadow-xs">
             ĐĂNG KÝ THÀNH VIÊN NGAY
           </div>
-          <p className="mt-2 text-[11px] text-amber-100/90">
-            Mua vé online · Lưu số yêu thích · Con số phong thủy · Trợ lý AI xổ số
-          </p>
-          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-300 to-amber-500 px-4 py-1.5 text-xs font-extrabold text-red-950 shadow-sm group-hover:from-amber-200 group-hover:to-amber-400">
-            <UserPlus className="size-3.5" /> Đăng ký ngay
+
+          <ul className="mt-4 space-y-2 pl-2 text-left text-xs font-bold text-amber-50">
+            <li className="flex items-center gap-1.5">
+              <Check className="size-3.5 shrink-0 text-amber-300 stroke-[3]" /> Mua vé số Online
+            </li>
+            <li className="flex items-center gap-1.5">
+              <Check className="size-3.5 shrink-0 text-amber-300 stroke-[3]" /> Lưu số yêu thích
+            </li>
+            <li className="flex items-center gap-1.5">
+              <Check className="size-3.5 shrink-0 text-amber-300 stroke-[3]" /> Con số phong thủy
+            </li>
+            <li className="flex items-center gap-1.5">
+              <Check className="size-3.5 shrink-0 text-amber-300 stroke-[3]" /> Trợ lý AI Xổ Số
+            </li>
+          </ul>
+        </div>
+
+        <div className="relative mt-4 flex flex-col items-center gap-3.5">
+          <span className="grid size-14 place-items-center rounded-2xl border border-amber-300/50 bg-gradient-to-b from-amber-300/25 to-amber-600/20 text-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.3)]">
+            <UserPlus className="size-7 drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+          </span>
+
+          {/* Nút Đăng ký ngay với hiệu ứng shimmer + nhún nhẹ pulse */}
+          <span className="relative inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-full bg-gradient-to-b from-amber-200 via-amber-400 to-amber-500 px-5 py-2 text-xs font-black uppercase tracking-wide text-red-950 ring-2 ring-amber-200/80 animate-[cta-pulse_1.8s_ease-in-out_infinite] group-hover:from-amber-100 group-hover:to-amber-400">
+            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/75 to-transparent animate-[shimmer_2s_infinite]" />
+            <UserPlus className="relative size-3.5 stroke-[2.5]" />
+            <span className="relative">Đăng ký ngay</span>
           </span>
         </div>
       </Link>
@@ -445,17 +519,13 @@ export function RightSidebar() {
       {/* #6: Banner dọc XỔ SỐ MINH LUÂN — ĐỔI SỐ TRÚNG ĐẶC BIỆT */}
       <Link
         href="/mua-ve-online"
-        className="group relative block overflow-hidden rounded-xl border-2 border-amber-400/70 bg-gradient-to-b from-[#0f2454] via-[#132c68] to-[#081533] p-4 text-center text-white shadow-md transition-transform hover:scale-[1.01]"
+        className="group relative block overflow-hidden rounded-xl border-2 border-amber-400/70 bg-gradient-to-b from-[#0f2454] via-[#132c68] to-[#081533] px-2.5 py-4 text-center text-white shadow-md transition-transform hover:scale-[1.01]"
       >
         <div className="text-xs font-extrabold uppercase tracking-wide text-amber-300">
           XỔ SỐ MINH LUÂN
         </div>
-        <div className="mt-2 text-2xl font-extrabold uppercase leading-tight tracking-wide text-white">
-          ĐỔI SỐ
-          <br />
-          TRÚNG
-          <br />
-          ĐẶC BIỆT
+        <div className="mt-2 whitespace-nowrap text-[14.5px] sm:text-base lg:text-[14.5px] font-black uppercase leading-tight tracking-tight text-white drop-shadow-xs">
+          ĐỔI SỐ TRÚNG ĐẶC BIỆT
         </div>
         <div className="mt-3 rounded-lg border border-amber-400/30 bg-black/30 py-1.5 font-mono text-lg font-extrabold tracking-wide text-amber-300">
           {siteConfig.hotline}
@@ -474,13 +544,76 @@ export function RightSidebar() {
             <Check className="size-3.5 text-amber-400 shrink-0" /> Tận Nơi
           </li>
         </ul>
+
+        {/* Icon Hũ Vàng / Thùng Vàng Tài Lộc bắt mắt */}
         <div className="my-3.5 flex justify-center">
-          <span className="grid size-12 place-items-center rounded-2xl bg-amber-400/15 border border-amber-400/40 text-amber-300">
-            <Trophy className="size-6" />
+          <span className="relative grid size-14 place-items-center rounded-2xl border border-amber-400/50 bg-gradient-to-b from-amber-400/25 to-amber-600/15 shadow-[0_0_16px_rgba(251,191,36,0.3)]">
+            <svg
+              viewBox="0 0 64 64"
+              className="size-9 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)] transition-transform duration-300 group-hover:scale-110"
+              aria-label="Hũ vàng tài lộc"
+            >
+              <defs>
+                <linearGradient id="potGold" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#FFF59D" />
+                  <stop offset="45%" stopColor="#FFD54F" />
+                  <stop offset="80%" stopColor="#FFB300" />
+                  <stop offset="100%" stopColor="#E65100" />
+                </linearGradient>
+                <linearGradient id="ingotGold" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#FFFDE7" />
+                  <stop offset="50%" stopColor="#FFD740" />
+                  <stop offset="100%" stopColor="#FF8F00" />
+                </linearGradient>
+                <linearGradient id="rubyRed" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#FF5252" />
+                  <stop offset="100%" stopColor="#B71C1C" />
+                </linearGradient>
+              </defs>
+              {/* Tia sáng lấp lánh */}
+              <circle cx="13" cy="14" r="1.8" fill="#FFF59D" />
+              <circle cx="52" cy="13" r="2" fill="#FFF59D" />
+              <circle cx="32" cy="7" r="1.6" fill="#FFFFFF" />
+              {/* Đống thỏi vàng & đồng xu đầy ắp trên miệng hũ */}
+              <circle cx="20" cy="22" r="6" fill="url(#ingotGold)" stroke="#B26A00" strokeWidth="1" />
+              <circle cx="44" cy="22" r="6" fill="url(#ingotGold)" stroke="#B26A00" strokeWidth="1" />
+              <ellipse cx="32" cy="17" rx="8" ry="4.5" fill="#FFF59D" stroke="#B26A00" strokeWidth="1" />
+              <path
+                d="M21 18 C23 13, 41 13, 43 18 L40 24 C36 25.5, 28 25.5, 24 24 Z"
+                fill="url(#ingotGold)"
+                stroke="#B26A00"
+                strokeWidth="1"
+              />
+              {/* Vành miệng hũ vàng */}
+              <rect x="13" y="23" width="38" height="5.5" rx="2.75" fill="url(#ingotGold)" stroke="#B26A00" strokeWidth="1.2" />
+              {/* Thân hũ vàng tài lộc */}
+              <path
+                d="M15 28.5 C9 35, 10 49, 19 54.5 C24 57.2, 40 57.2, 45 54.5 C54 49, 55 35, 49 28.5 Z"
+                fill="url(#potGold)"
+                stroke="#B26A00"
+                strokeWidth="1.4"
+              />
+              {/* Hoa văn ngọc đỏ Lộc Phát giữa thân hũ */}
+              <rect
+                x="26.5"
+                y="36.5"
+                width="11"
+                height="11"
+                rx="2"
+                transform="rotate(45 32 42)"
+                fill="url(#rubyRed)"
+                stroke="#FFF59D"
+                strokeWidth="1.3"
+              />
+              <circle cx="32" cy="42" r="2.2" fill="#FFF59D" />
+            </svg>
           </span>
         </div>
-        <span className="inline-block rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-5 py-1.5 text-xs font-extrabold text-slate-950 shadow-sm group-hover:from-amber-200 group-hover:to-amber-400">
-          Click vào đây
+
+        {/* Nút bấm "Click vào đây" kèm hiệu ứng nhún nhẹ + ánh sáng shimmer thu hút */}
+        <span className="relative inline-flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-b from-amber-300 via-amber-400 to-amber-500 px-5 py-1.5 text-xs font-extrabold text-slate-950 shadow-[0_0_16px_rgba(251,191,36,0.75)] ring-2 ring-amber-200/80 animate-bounce group-hover:from-amber-200 group-hover:to-amber-400">
+          <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/70 to-transparent animate-[shimmer_2s_infinite]" />
+          <span className="relative">Click vào đây</span>
         </span>
       </Link>
 
@@ -533,8 +666,9 @@ export function RightSidebar() {
         <div className="mt-0.5 text-sm font-extrabold uppercase tracking-wide text-white">
           TƯỜNG THUẬT
         </div>
-        <div className="mt-0.5 inline-block rounded-md bg-red-600 px-3 py-0.5 text-lg font-extrabold uppercase tracking-wide text-white shadow-xs">
-          TRỰC TIẾP
+        <div className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-amber-300/70 bg-gradient-to-r from-red-600 via-red-500 to-red-600 px-3.5 py-1 text-lg font-black uppercase tracking-wide text-white animate-[live-pulse-glow_1.6s_ease-in-out_infinite]">
+          <span className="inline-block size-2.5 rounded-full bg-amber-300 animate-ping" />
+          <span>TRỰC TIẾP</span>
         </div>
 
         {/* High-Quality Crisp Vector YouTube Logo */}
@@ -573,7 +707,7 @@ export function RightSidebar() {
         <ul className="space-y-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400">
           <li>
             <Link href="/dashboard" className="hover:underline">
-              ▸ Hướng dẫn đăng ký thành viên, in vé dò
+              ▸ Hướng dẫn đăng ký thành viên
             </Link>
           </li>
           <li>

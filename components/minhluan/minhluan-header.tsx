@@ -19,6 +19,8 @@ import { audioSynth } from '@/lib/audio-synthesizer';
 
 interface MinhLuanHeaderProps {
   activeDateStr: string;
+  activeDate?: Date;
+  onSelectDate?: (date: Date) => void;
   allProvinces: ProvinceDrawResult[];
   activeRegionTab: 'all' | 'south' | 'central' | 'north' | 'vietlott';
   onSelectRegionTab: (tab: 'all' | 'south' | 'central' | 'north' | 'vietlott') => void;
@@ -42,8 +44,17 @@ const mainNavLinks = [
   { label: 'USER DASHBOARD', href: '/dashboard', highlight: true },
 ];
 
+function toIsoDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function MinhLuanHeader({
   activeDateStr,
+  activeDate,
+  onSelectDate,
   allProvinces,
   activeRegionTab,
   onSelectRegionTab,
@@ -62,9 +73,56 @@ export function MinhLuanHeader({
   const [password, setPassword] = useState('');
 
   // Form Dò vé số Online (#3)
+  const [selectedDateIso, setSelectedDateIso] = useState<string>(() => {
+    if (activeDate) return toIsoDateString(activeDate);
+    const match = activeDateStr?.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (match) {
+      const [, day, mon, yr] = match;
+      return `${yr}-${mon.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return toIsoDateString(new Date());
+  });
   const [selectedProvId, setSelectedProvId] = useState<string>('');
   const [ticketNum, setTicketNum] = useState<string>('');
   const [checkResult, setCheckResult] = useState<TicketMatchResult | null>(null);
+
+  React.useEffect(() => {
+    if (activeDate) {
+      setSelectedDateIso(toIsoDateString(activeDate));
+    } else if (activeDateStr) {
+      const match = activeDateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (match) {
+        const [, day, mon, yr] = match;
+        setSelectedDateIso(`${yr}-${mon.padStart(2, '0')}-${day.padStart(2, '0')}`);
+      }
+    }
+  }, [activeDate, activeDateStr]);
+
+  React.useEffect(() => {
+    if (allProvinces.length > 0) {
+      const exists = allProvinces.some((p) => p.provinceId === selectedProvId);
+      if (!exists) {
+        setSelectedProvId(allProvinces[0].provinceId);
+      }
+    }
+  }, [allProvinces, selectedProvId]);
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!val) return;
+    setSelectedDateIso(val);
+    const [y, m, d] = val.split('-').map(Number);
+    if (!y || !m || !d) return;
+    const picked = new Date(y, m - 1, d, 12, 0, 0);
+
+    if (onSelectDate) {
+      onSelectDate(picked);
+    } else if (pathname === '/') {
+      router.push(`/?date=${val}`);
+    } else {
+      router.push(`/ngay/${val}`);
+    }
+  };
 
   const handleQuickLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +148,7 @@ export function MinhLuanHeader({
         <div className="mx-auto flex max-w-[1260px] flex-wrap items-center justify-between gap-2 px-3 py-1.5 lg:px-4">
           <div className="flex flex-wrap items-center gap-1 font-semibold">
             <Link href="/" className="font-black text-red-700 dark:text-red-400 hover:underline">
-              Xổ Số Minh Luân™
+              Xổ Số Minh Luân
             </Link>
             <span className="text-muted-foreground">»</span>
             <Link href="/#xsmn" className="hover:text-red-600 hover:underline">
@@ -152,30 +210,34 @@ export function MinhLuanHeader({
         </div>
       </div>
 
-      {/* Main Header Banner: #2 Logo | Center Title & Tabs | #3 Dò vé số Online */}
+      {/* Main Header Banner: #1 Logo Minh Luân | Center Chuyên trang... & Menu | #2 Dò vé số Online */}
       <div className="mx-auto max-w-[1260px] px-3 py-2.5 lg:px-4">
-        <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-12">
-          {/* #2: Logo "Nắm bắt cơ hội" Minh Luân */}
+        <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-12">
+          {/* #1: Logo Minh Luân - Giữ nguyên 100% tỷ lệ gốc tự nhiên, không ép chiều rộng/cao */}
           <div className="flex items-center justify-between lg:col-span-4">
-            <Link href="/" className="block overflow-hidden rounded-lg border border-amber-500/40 shadow-sm hover:opacity-95 transition-opacity">
+            <Link
+              href="/"
+              className="flex w-full items-center justify-center overflow-hidden rounded-lg border border-amber-500/40 bg-[#7d0000] shadow-sm hover:opacity-95 transition-opacity"
+            >
               <img
                 src="/logo-minh-luan.png"
                 alt="Xổ Số Minh Luân - Nắm bắt cơ hội từ con số may mắn!"
-                className="h-20 sm:h-24 w-auto max-w-full object-contain bg-[#7d0000]"
+                className="block w-auto h-auto max-h-[110px] max-w-full object-contain"
+                style={{ imageRendering: '-webkit-optimize-contrast' }}
               />
             </Link>
 
             <button
               type="button"
               onClick={() => setMobileMenuOpen((v) => !v)}
-              className="rounded-lg border p-2 lg:hidden"
+              className="ml-2 rounded-lg border p-2 lg:hidden shrink-0"
               aria-label="Mở menu"
             >
               {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
           </div>
 
-          {/* Center: CHUYÊN TRANG KẾT QUẢ XỔ SỐ KIẾN THIẾT — MINH LUÂN + Region Tabs */}
+          {/* Center: Canh giữa nội dung Chuyên trang kết quả... và Menu 5 nút ở dưới */}
           <div className="flex flex-col items-center justify-center text-center lg:col-span-4">
             <div className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wide text-foreground/80">
               CHUYÊN TRANG KẾT QUẢ XỔ SỐ KIẾN THIẾT
@@ -184,7 +246,7 @@ export function MinhLuanHeader({
               MINH LUÂN
             </div>
 
-            {/* 5 Gray Tabs chuẩn Minh Ngọc */}
+            {/* Menu 5 nút ở dưới canh giữa */}
             <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1">
               {[
                 { id: 'all', label: 'Home' },
@@ -212,29 +274,36 @@ export function MinhLuanHeader({
             </div>
           </div>
 
-          {/* #3: Khung Dò vé số Online - Kết quả liền tay */}
-          <div className="lg:col-span-4">
-            <div className="overflow-hidden rounded-lg border-2 border-amber-500 bg-card shadow-xs">
-              <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-3 py-1 text-center text-xs font-black text-black">
+          {/* #2: Khung Dò vé số Online - Cân đối chiều dài & chiều cao đồng đều với Logo bên trái */}
+          <div className="flex items-center lg:col-span-4">
+            <div className="flex min-h-[104px] sm:min-h-[116px] w-full flex-col justify-between overflow-hidden rounded-lg border-2 border-amber-500 bg-card shadow-xs">
+              <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-3 py-1.5 text-center text-xs font-black text-black">
                 Dò vé số Online - Kết quả liền tay
               </div>
-              <form onSubmit={handleInlineCheck} className="p-2 text-xs space-y-1.5">
+              <form onSubmit={handleInlineCheck} className="flex flex-1 flex-col justify-center space-y-2 p-2.5 text-xs">
                 <div className="grid grid-cols-2 gap-1.5">
                   <div className="flex items-center gap-1">
-                    <span className="shrink-0 font-semibold text-muted-foreground">Ngày:</span>
+                    <label htmlFor="header-date-input" className="shrink-0 font-semibold text-muted-foreground text-[11px] cursor-pointer">
+                      Ngày:
+                    </label>
                     <input
-                      type="text"
-                      readOnly
-                      value={activeDateStr}
-                      className="w-full rounded border bg-muted/30 px-1.5 py-0.5 text-[11px] font-mono font-bold"
+                      id="header-date-input"
+                      type="date"
+                      value={selectedDateIso}
+                      onChange={handleDateChange}
+                      className="w-full rounded border border-input bg-background px-1 py-0.5 text-[11px] font-mono font-bold text-foreground outline-none focus:border-red-500 cursor-pointer shadow-2xs"
+                      title="Bấm để chọn ngày quay thưởng"
                     />
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="shrink-0 font-semibold text-muted-foreground">Tỉnh:</span>
+                    <label htmlFor="header-prov-select" className="shrink-0 font-semibold text-muted-foreground text-[11px] cursor-pointer">
+                      Tỉnh:
+                    </label>
                     <select
+                      id="header-prov-select"
                       value={selectedProvId}
                       onChange={(e) => setSelectedProvId(e.target.value)}
-                      className="w-full rounded border bg-background px-1 py-0.5 text-[11px] font-semibold outline-none focus:border-red-500"
+                      className="w-full rounded border border-input bg-background px-1 py-0.5 text-[11px] font-semibold text-foreground outline-none focus:border-red-500 cursor-pointer shadow-2xs"
                     >
                       <option value="">Chọn tỉnh</option>
                       {allProvinces.map((p) => (
@@ -247,14 +316,14 @@ export function MinhLuanHeader({
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <span className="shrink-0 font-semibold text-muted-foreground">Vé Số:</span>
+                  <span className="shrink-0 font-semibold text-muted-foreground text-[11px]">Vé Số:</span>
                   <input
                     type="text"
                     maxLength={6}
                     placeholder="Nhập 6 số vé..."
                     value={ticketNum}
                     onChange={(e) => setTicketNum(e.target.value.replace(/\D/g, ''))}
-                    className="flex-1 rounded border bg-background px-2 py-1 font-mono text-xs font-black tracking-widest outline-none focus:border-red-500"
+                    className="flex-1 rounded border border-input bg-background px-2 py-1 font-mono text-xs font-black tracking-widest outline-none focus:border-red-500"
                   />
                   <button
                     type="submit"

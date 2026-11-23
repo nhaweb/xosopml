@@ -131,6 +131,37 @@
   animation: spin-slow 4s linear infinite;
 }
 
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+@keyframes live-pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.7), 0 0 18px rgba(239, 68, 68, 0.35);
+  }
+  50% {
+    transform: scale(1.07);
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.9), 0 0 28px rgba(239, 68, 68, 0.75);
+  }
+}
+
+@keyframes cta-pulse {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.55);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.9);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
