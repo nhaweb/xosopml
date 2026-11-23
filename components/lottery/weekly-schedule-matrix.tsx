@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Calendar, ChevronRight } from 'lucide-react';
-import { PROVINCES } from '@/config/lottery-provinces';
+import { PROVINCES, sortProvincesCanonical } from '@/config/lottery-provinces';
 
 const DAYS_OF_WEEK = [
   { dayIndex: 1, label: 'Thứ Hai', short: 'T2' },
@@ -19,7 +19,9 @@ export function WeeklyScheduleMatrix() {
   const currentDayOfWeek = new Date().getDay();
 
   const getProvincesForDayAndRegion = (dayIdx: number, region: 'south' | 'central' | 'north') => {
-    return PROVINCES.filter((p) => p.region === region && p.drawDays.includes(dayIdx));
+    return sortProvincesCanonical(
+      PROVINCES.filter((p) => p.region === region && p.drawDays.includes(dayIdx))
+    );
   };
 
   return (

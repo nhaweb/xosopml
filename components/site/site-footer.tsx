@@ -147,19 +147,6 @@ export function SiteFooter() {
               >
                 Zalo
               </a>
-
-              {/* YouTube Official Channel */}
-              <a
-                href={siteConfig.youtubeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="YouTube Xổ Số Minh Luân"
-                className="grid size-10 place-items-center rounded-xl bg-white/10 text-white transition-all hover:scale-105 hover:bg-[#FF0000]"
-              >
-                <svg className="size-6 fill-current" viewBox="0 0 24 24">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                </svg>
-              </a>
             </div>
 
             <div className="space-y-1.5 text-xs text-slate-300">
@@ -182,24 +169,13 @@ export function SiteFooter() {
                   {siteConfig.email}
                 </a>
               </p>
-              <p>
-                <span className="text-slate-400">YouTube:</span>{' '}
-                <a
-                  href={siteConfig.youtubeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-red-400 hover:underline"
-                >
-                  @xosominhluan
-                </a>
-              </p>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 border-t border-slate-800/80 pt-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400">
-          <p>© 2026 {siteConfig.name} — {siteConfig.address}</p>
-          <p>{siteConfig.schedule}</p>
+        <div className="mt-8 border-t border-slate-800/80 pt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8 items-center text-[11px] text-slate-400">
+          <p className="lg:col-span-3">© 2026 {siteConfig.name} — {siteConfig.address}</p>
+          <p className="lg:col-span-1">Thiết kế &amp; Phát triển bởi PML Vietnam</p>
         </div>
       </div>
     </footer>

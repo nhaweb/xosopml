@@ -1,4 +1,4 @@
-import { PROVINCES, getProvincesByDay } from '@/config/lottery-provinces';
+import { PROVINCES, getProvincesByDay, sortProvincesCanonical } from '@/config/lottery-provinces';
 import { getFallbackLotteryResults } from '@/lib/fallback-lottery-data';
 import { formatDate } from '@/lib/format';
 import { calculateLoGan } from '@/lib/stats-calculator';
@@ -715,6 +715,10 @@ export async function fetchLotteryResultsByDate(
   }
 
   if (south.length > 0 || central.length > 0 || north.length > 0) {
+    south = sortProvincesCanonical(south);
+    central = sortProvincesCanonical(central);
+    north = sortProvincesCanonical(north);
+
     const resultData: DayLotteryData = {
       date: date.toISOString(),
       formattedDate: formatDate(date),

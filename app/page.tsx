@@ -6,7 +6,6 @@ import { Check, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import { getFallbackLotteryResults } from '@/lib/fallback-lottery-data';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
 import { AiLotoSummaryWidget } from '@/components/lottery/ai-loto-summary-widget';
-import { LiveCountdownBanner } from '@/components/lottery/live-countdown-banner';
 import { WeeklyScheduleMatrix } from '@/components/lottery/weekly-schedule-matrix';
 import { TicketCheckerModal } from '@/components/lottery/ticket-checker-modal';
 import { VietlottKenoWidget } from '@/components/lottery/vietlott-keno-widget';
@@ -17,11 +16,12 @@ import {
 import { MinhLuanHeader } from '@/components/minhluan/minhluan-header';
 import { RotatingPromoBanner } from '@/components/minhluan/rotating-promo-banner';
 import { Stats3ColTable } from '@/components/minhluan/stats-3col-table';
-import { LeftSidebar, RightSidebar } from '@/components/minhluan/sidebars';
+import { LeftSidebar, RightSidebar, SidebarLookupQuery } from '@/components/minhluan/sidebars';
 import { SiteFooter } from '@/components/site/site-footer';
+import { PROVINCES } from '@/config/lottery-provinces';
 import { audioSynth } from '@/lib/audio-synthesizer';
 import { formatDate } from '@/lib/format';
-import { DayLotteryData } from '@/types/lottery';
+import { DayLotteryData, ProvinceDrawResult } from '@/types/lottery';
 
 function toIsoDate(d: Date): string {
   const y = d.getFullYear();
@@ -38,6 +38,18 @@ export default function Page() {
   const [priorityRegion, setPriorityRegion] = useState<'south' | 'north' | 'central'>('south');
   const [activeRegionTab, setActiveRegionTab] = useState<'all' | 'south' | 'central' | 'north' | 'vietlott'>('all');
   const [showYesterdayFull, setShowYesterdayFull] = useState(true);
+
+  // State hiển thị kết quả "Tra Cứu Kết Quả Xổ Số" trực tiếp ngay trên Homepage
+  const [lookupBoard, setLookupBoard] = useState<{
+    id: string;
+    title: string;
+    regionCode: string;
+    drawTime: string;
+    dateStr: string;
+    results: ProvinceDrawResult[];
+    initialMode: 'full' | 'last2' | 'last3';
+  } | null>(null);
+  const [lookupLoading, setLookupLoading] = useState<boolean>(false);
 
   const prevDate = useMemo(() => {
     const d = new Date(activeDate);
@@ -70,6 +82,17 @@ export default function Page() {
       document.documentElement.classList.toggle('dark', isDark);
     } catch {
       // ignore
+    }
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const dateParam = params.get('date');
+      if (dateParam) {
+        const [y, m, d] = dateParam.split('-').map(Number);
+        if (y && m && d) {
+          setActiveDate(new Date(y, m - 1, d, 12, 0, 0));
+        }
+      }
     }
   }, []);
 
@@ -152,6 +175,143 @@ export default function Page() {
     }
   };
 
+  const handleSidebarLookup = useCallback(
+    async (query: SidebarLookupQuery) => {
+      // Cuộn mượt tới khu vực bảng kết quả giữa trang
+      if (typeof document !== 'undefined') {
+        document.getElementById('kqxs-hom-nay')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      if (query.mode === 'region' || query.mode === 'headtail') {
+        const regionMap = {
+          'mien-nam': {
+            id: 'xsmn-lookup',
+            label: 'MIỀN NAM',
+            regionCode: '18 Giải',
+            drawTime: '16:15',
+            results: lotteryData.south,
+          },
+          'mien-trung': {
+            id: 'xsmt-lookup',
+            label: 'MIỀN TRUNG',
+            regionCode: '18 Giải',
+            drawTime: '17:15',
+            results: lotteryData.central,
+          },
+          'mien-bac': {
+            id: 'xsmb-lookup',
+            label: 'MIỀN BẮC',
+            regionCode: '27 Giải',
+            drawTime: '18:15',
+            results: lotteryData.north,
+          },
+        } as const;
+
+        const target = regionMap[query.region];
+        setLookupLoading(false);
+        setLookupBoard({
+          id: target.id,
+          title:
+            query.mode === 'headtail'
+              ? `TRA CỨU ĐẦU ĐUÔI XỔ SỐ ${target.label} - ${lotteryData.formattedDate}`
+              : `TRA CỨU KẾT QUẢ XỔ SỐ ${target.label} - ${lotteryData.formattedDate}`,
+          regionCode: target.regionCode,
+          drawTime: target.drawTime,
+          dateStr: lotteryData.formattedDate,
+          results: target.results,
+          initialMode: query.mode === 'headtail' ? 'last2' : 'full',
+        });
+        return;
+      }
+
+      // Chế độ tra cứu theo Tỉnh/Đài cụ thể
+      const provInfo = PROVINCES.find((p) => p.id === query.provinceId);
+      if (!provInfo) return;
+
+      const regionCodeLabel = provInfo.region === 'north' ? '27 Giải' : '18 Giải';
+      const idPrefix =
+        provInfo.region === 'south'
+          ? 'xsmn'
+          : provInfo.region === 'central'
+          ? 'xsmt'
+          : 'xsmb';
+
+      // Nếu đài có mở thưởng đúng ngày đang xem -> hiển thị ngay
+      const existingToday = allProvinces.find((p) => p.provinceId === provInfo.id);
+      if (existingToday) {
+        setLookupLoading(false);
+        setLookupBoard({
+          id: `${idPrefix}-lookup-${provInfo.id}`,
+          title: `KẾT QUẢ XỔ SỐ ${provInfo.name.toUpperCase()} - ${lotteryData.formattedDate}`,
+          regionCode: regionCodeLabel,
+          drawTime: provInfo.drawTime,
+          dateStr: lotteryData.formattedDate,
+          results: [existingToday],
+          initialMode: 'full',
+        });
+        return;
+      }
+
+      // Tìm kỳ quay gần nhất của tỉnh này (lùi 1-7 ngày) để lấy dữ liệu thực tế
+      const targetDate = new Date(activeDate);
+      for (let offset = 1; offset <= 7; offset++) {
+        const candidate = new Date(activeDate);
+        candidate.setDate(activeDate.getDate() - offset);
+        if (provInfo.drawDays.includes(candidate.getDay())) {
+          targetDate.setTime(candidate.getTime());
+          break;
+        }
+      }
+
+      setLookupLoading(true);
+      try {
+        const res = await fetch(`/api/xoso/draws?date=${toIsoDate(targetDate)}`);
+        let dayData: DayLotteryData = getFallbackLotteryResults(targetDate);
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.data) {
+            dayData = json.data;
+          }
+        }
+        const regionList = dayData[provInfo.region] || [];
+        const matched =
+          regionList.find((p) => p.provinceId === provInfo.id) ||
+          getFallbackLotteryResults(targetDate)[provInfo.region].find(
+            (p) => p.provinceId === provInfo.id
+          );
+
+        if (matched) {
+          setLookupBoard({
+            id: `${idPrefix}-lookup-${provInfo.id}`,
+            title: `KẾT QUẢ XỔ SỐ ${provInfo.name.toUpperCase()} - ${dayData.formattedDate}`,
+            regionCode: regionCodeLabel,
+            drawTime: provInfo.drawTime,
+            dateStr: dayData.formattedDate,
+            results: [matched],
+            initialMode: 'full',
+          });
+        }
+      } catch {
+        const fallbackDay = getFallbackLotteryResults(targetDate);
+        const matched = fallbackDay[provInfo.region].find((p) => p.provinceId === provInfo.id);
+        if (matched) {
+          setLookupBoard({
+            id: `${idPrefix}-lookup-${provInfo.id}`,
+            title: `KẾT QUẢ XỔ SỐ ${provInfo.name.toUpperCase()} - ${fallbackDay.formattedDate}`,
+            regionCode: regionCodeLabel,
+            drawTime: provInfo.drawTime,
+            dateStr: fallbackDay.formattedDate,
+            results: [matched],
+            initialMode: 'full',
+          });
+        }
+      } finally {
+        setLookupLoading(false);
+      }
+    },
+    [activeDate, allProvinces, lotteryData]
+  );
+
   const isToday = useMemo(() => {
     const now = new Date();
     return (
@@ -206,6 +366,8 @@ export default function Page() {
       {/* Header chuẩn Minh Luân (#1, #2, #3 + Red Nav Bar) */}
       <MinhLuanHeader
         activeDateStr={activeDateFormatted}
+        activeDate={activeDate}
+        onSelectDate={(d) => setActiveDate(d)}
         allProvinces={allProvinces}
         activeRegionTab={activeRegionTab}
         onSelectRegionTab={handleSelectRegionTab}
@@ -225,14 +387,13 @@ export default function Page() {
               activeDate={activeDate}
               onSelectDate={(d) => setActiveDate(d)}
               lotteryData={lotteryData}
+              onLookupResult={handleSidebarLookup}
             />
           </div>
 
           {/* CỘT GIỮA */}
           <div className="order-1 lg:order-2 min-w-0">
             <RotatingPromoBanner />
-
-            <LiveCountdownBanner />
 
             {/* Trạng thái kết nối xosoapi.online & Caching */}
             <ApiDataSourceBanner
@@ -317,6 +478,28 @@ export default function Page() {
                 </span>
               </div>
             </div>
+
+            {/* KẾT QUẢ TRA CỨU TRỰC TIẾP TỪ CỘT TRÁI */}
+            {(lookupLoading || lookupBoard) && (
+              <div id="kqxs-tra-cuu" className="mb-6">
+                {lookupLoading ? (
+                  <LotteryBoardSkeleton count={1} />
+                ) : (
+                  lookupBoard && (
+                    <RegionLotteryBoard
+                      id={lookupBoard.id}
+                      title={lookupBoard.title}
+                      regionCode={lookupBoard.regionCode}
+                      drawTime={lookupBoard.drawTime}
+                      dateStr={lookupBoard.dateStr}
+                      results={lookupBoard.results}
+                      initialMode={lookupBoard.initialMode}
+                      onClose={() => setLookupBoard(null)}
+                    />
+                  )
+                )}
+              </div>
+            )}
 
             {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (3 MIỀN) HOẶC SKELETON LOADING */}
             {activeRegionTab !== 'vietlott' && (

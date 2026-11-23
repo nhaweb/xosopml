@@ -55,3 +55,177 @@ export function getProvincesByDay(dayOfWeek: number, region?: string) {
     return region ? matchDay && p.region === region : matchDay;
   });
 }
+
+/**
+ * Bảng ánh xạ chuẩn tên tỉnh/đài -> Mã ký hiệu đài (Miền Nam, Miền Trung, Miền Bắc)
+ */
+export const PROVINCE_CODE_MAP: Record<string, string> = {
+  // Miền Nam (21 đài)
+  'TP.HCM': 'HCM',
+  'TP. Hồ Chí Minh': 'HCM',
+  'Hồ Chí Minh': 'HCM',
+  'Đồng Tháp': 'DT',
+  'Cà Mau': 'CM',
+  'Bến Tre': 'BT',
+  'Vũng Tàu': 'VT',
+  'Bà Rịa - Vũng Tàu': 'VT',
+  'Bạc Liêu': 'BL',
+  'Đồng Nai': 'DN',
+  'Cần Thơ': 'CT',
+  'Sóc Trăng': 'ST',
+  'Tây Ninh': 'TN',
+  'An Giang': 'AG',
+  'Bình Thuận': 'BTH',
+  'Vĩnh Long': 'VL',
+  'Bình Dương': 'BD',
+  'Trà Vinh': 'TV',
+  'Long An': 'LA',
+  'Bình Phước': 'BP',
+  'Hậu Giang': 'HG',
+  'Tiền Giang': 'TG',
+  'Kiên Giang': 'KG',
+  'Đà Lạt': 'DL',
+  'Lâm Đồng': 'DL',
+
+  // Miền Trung (14 đài)
+  'Thừa Thiên Huế': 'TTH',
+  'Thừa T. Huế': 'TTH',
+  'Huế': 'TTH',
+  'Phú Yên': 'PY',
+  'Đắk Lắk': 'DLK',
+  'Đắc Lắc': 'DLK',
+  'Quảng Nam': 'QNM',
+  'Đà Nẵng': 'DNG',
+  'Khánh Hòa': 'KH',
+  'Khánh Hoà': 'KH',
+  'Bình Định': 'BDI',
+  'Quảng Trị': 'QT',
+  'Quảng Bình': 'QB',
+  'Gia Lai': 'GL',
+  'Ninh Thuận': 'NT',
+  'Quảng Ngãi': 'QNG',
+  'Đắk Nông': 'DNO',
+  'Đắc Nông': 'DNO',
+  'Kon Tum': 'KT',
+
+  // Miền Bắc (6 đài)
+  'Hà Nội': 'HN',
+  'Quảng Ninh': 'QN',
+  'Bắc Ninh': 'BN',
+  'Hải Phòng': 'HP',
+  'Nam Định': 'ND',
+  'Thái Bình': 'TB',
+  'Miền Bắc': 'MB',
+};
+
+function normalizeProvinceKey(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+const NORMALIZED_PROVINCE_CODE_MAP: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const [name, code] of Object.entries(PROVINCE_CODE_MAP)) {
+    map[normalizeProvinceKey(name)] = code;
+  }
+  for (const p of PROVINCES) {
+    map[normalizeProvinceKey(p.name)] = p.code;
+    map[normalizeProvinceKey(p.id)] = p.code;
+  }
+  return map;
+})();
+
+/**
+ * Tự động suy ra mã đài chuẩn từ tên tỉnh/đài (hỗ trợ ghi đè thủ công qua manualOverride).
+ */
+export function resolveProvinceCode(
+  provinceName: string,
+  manualOverride?: string,
+  provinceId?: string,
+  fallbackCode?: string
+): string {
+  if (manualOverride && manualOverride.trim()) {
+    return manualOverride.trim().toUpperCase();
+  }
+
+  const direct = PROVINCE_CODE_MAP[provinceName?.trim()];
+  if (direct) return direct;
+
+  if (provinceName) {
+    const byName = NORMALIZED_PROVINCE_CODE_MAP[normalizeProvinceKey(provinceName)];
+    if (byName) return byName;
+  }
+
+  if (provinceId) {
+    const byId = NORMALIZED_PROVINCE_CODE_MAP[normalizeProvinceKey(provinceId)];
+    if (byId) return byId;
+  }
+
+  if (fallbackCode && fallbackCode.trim()) {
+    // Bỏ tiền tố "XS" nếu dữ liệu API trả về dạng "XSTG", "XSHCM"...
+    const cleaned = fallbackCode.trim().toUpperCase();
+    return cleaned.startsWith('XS') && cleaned.length > 3 ? cleaned.slice(2) : cleaned;
+  }
+
+  return '';
+}
+
+const CANONICAL_PROVINCE_ORDER: Record<string, number> = (() => {
+  const order: Record<string, number> = {};
+  PROVINCES.forEach((p, idx) => {
+    order[p.code.toUpperCase()] = idx;
+    order[normalizeProvinceKey(p.id)] = idx;
+    order[normalizeProvinceKey(p.name)] = idx;
+  });
+  return order;
+})();
+
+/**
+ * Sắp xếp danh sách tỉnh/đài theo thứ tự chuẩn (luôn ưu tiên TP.HCM lên vị trí đầu tiên
+ * vào Thứ Hai và Thứ Bảy, đồng thời giữ đúng thứ tự chuẩn các đài còn lại).
+ */
+export function sortProvincesCanonical<
+  T extends {
+    provinceId?: string;
+    provinceName?: string;
+    provinceCode?: string;
+    id?: string;
+    name?: string;
+    code?: string;
+  }
+>(items: T[]): T[] {
+  if (!items || items.length <= 1) return items;
+
+  const getRank = (item: T): number => {
+    const name = item.provinceName ?? item.name ?? '';
+    const id = item.provinceId ?? item.id ?? '';
+    const code = resolveProvinceCode(name, undefined, id, item.provinceCode ?? item.code);
+
+    // Ưu tiên tuyệt đối đài TP.HCM lên cột đầu tiên
+    if (code === 'HCM' || id === 'tphcm') return -1;
+
+    if (code && CANONICAL_PROVINCE_ORDER[code] !== undefined) {
+      return CANONICAL_PROVINCE_ORDER[code];
+    }
+    if (id) {
+      const normId = normalizeProvinceKey(id);
+      if (CANONICAL_PROVINCE_ORDER[normId] !== undefined) {
+        return CANONICAL_PROVINCE_ORDER[normId];
+      }
+    }
+    if (name) {
+      const normName = normalizeProvinceKey(name);
+      if (CANONICAL_PROVINCE_ORDER[normName] !== undefined) {
+        return CANONICAL_PROVINCE_ORDER[normName];
+      }
+    }
+    return 999;
+  };
+
+  return [...items].sort((a, b) => getRank(a) - getRank(b));
+}

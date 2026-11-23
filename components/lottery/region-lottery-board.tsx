@@ -3,10 +3,11 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { ProvinceDrawResult } from '@/types/lottery';
+import { resolveProvinceCode, sortProvincesCanonical } from '@/config/lottery-provinces';
 import { DigitFilterBar } from './digit-filter-bar';
 import { PrizeCell } from './prize-cell';
 import { LotoHeadTailTable } from './loto-head-tail-table';
-import { CircleDot, Clock, Share2 } from 'lucide-react';
+import { CircleDot, Clock, Share2, X } from 'lucide-react';
 
 interface RegionLotteryBoardProps {
   id: string;
@@ -15,6 +16,12 @@ interface RegionLotteryBoardProps {
   drawTime: string;
   dateStr: string;
   results: ProvinceDrawResult[];
+  /** Tùy chọn ghi đè mã đài thủ công theo provinceId hoặc provinceName */
+  provinceCodeOverrides?: Record<string, string>;
+  /** Chế độ hiển thị mặc định (vd: 'last2' khi tra cứu Đầu đuôi) */
+  initialMode?: 'full' | 'last2' | 'last3';
+  /** Nút đóng bảng (dùng cho kết quả Tra Cứu trực tiếp trên Homepage) */
+  onClose?: () => void;
 }
 
 export function RegionLotteryBoard({
@@ -24,16 +31,26 @@ export function RegionLotteryBoard({
   drawTime,
   dateStr,
   results,
+  provinceCodeOverrides,
+  initialMode = 'full',
+  onClose,
 }: RegionLotteryBoardProps) {
-  const [mode, setMode] = useState<'full' | 'last2' | 'last3'>('full');
+  const [mode, setMode] = useState<'full' | 'last2' | 'last3'>(initialMode);
   const [highlightDigit, setHighlightDigit] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
 
   if (!results || results.length === 0) {
     return null;
   }
 
+  // Sắp xếp thứ tự cột chuẩn (ưu tiên TP.HCM lên đầu vào Thứ Hai & Thứ Bảy)
+  const orderedResults = sortProvincesCanonical(results);
+
   // Lấy danh sách hàng giải thưởng từ tỉnh đầu tiên làm chuẩn
-  const prizeRowsTemplate = results[0].prizes;
+  const prizeRowsTemplate = orderedResults[0].prizes;
 
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
@@ -89,6 +106,16 @@ export function RegionLotteryBoard({
           >
             <Share2 className="size-3.5" /> <span className="hidden sm:inline">Chia sẻ</span>
           </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1 rounded-md border border-amber-300/60 bg-black/30 px-2.5 py-1 text-[11px] font-bold text-amber-200 hover:bg-black/50"
+              title="Đóng kết quả tra cứu"
+            >
+              <X className="size-3.5" /> Đóng
+            </button>
+          )}
         </div>
       </div>
 
@@ -101,27 +128,54 @@ export function RegionLotteryBoard({
         onPrint={handlePrint}
       />
 
-      {/* Bảng kết quả chính dạng cột đa đài */}
+      {/* Bảng kết quả chính dạng cột đa đài chuẩn Minh Ngọc */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[540px] border-collapse text-sm">
+        <table
+          className={`w-full border-collapse text-sm ${
+            orderedResults.length >= 4
+              ? 'min-w-[660px] table-fixed'
+              : orderedResults.length === 3
+              ? 'min-w-[560px] table-fixed'
+              : orderedResults.length === 2
+              ? 'min-w-[440px] table-fixed'
+              : 'min-w-[360px]'
+          }`}
+        >
           <thead>
-            <tr className="border-b bg-blue-50/60 dark:bg-muted/50 text-foreground">
-              <th className="sticky left-0 z-10 w-24 bg-muted/90 border-r px-2 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <tr className="border-b bg-blue-50/70 dark:bg-muted/50 text-foreground">
+              <th className="sticky left-0 z-10 w-[78px] sm:w-[90px] bg-muted/95 border-r px-1.5 py-2.5 text-center text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
                 Giải
               </th>
-              {results.map((prov) => (
-                <th key={prov.provinceCode} className="border-r last:border-r-0 px-2.5 py-2.5 text-center">
-                  <Link
-                    href={`/ket-qua-xo-so/${regionSlug}/${prov.provinceId}.html`}
-                    className="block text-sm sm:text-base font-black text-blue-800 dark:text-blue-400 hover:text-red-600 hover:underline"
+              {orderedResults.map((prov) => {
+                const manualCode =
+                  provinceCodeOverrides?.[prov.provinceId] ??
+                  provinceCodeOverrides?.[prov.provinceName];
+                const resolvedCode = resolveProvinceCode(
+                  prov.provinceName,
+                  manualCode,
+                  prov.provinceId,
+                  prov.provinceCode
+                );
+
+                return (
+                  <th
+                    key={prov.provinceId || prov.provinceCode}
+                    className="border-r last:border-r-0 px-2 py-2.5 text-center"
                   >
-                    {prov.provinceName}
-                  </Link>
-                  <span className="block text-[10px] font-semibold text-muted-foreground">
-                    Mã: {prov.provinceCode}
-                  </span>
-                </th>
-              ))}
+                    <Link
+                      href={`/ket-qua-xo-so/${regionSlug}/${prov.provinceId}.html`}
+                      className="block text-sm sm:text-base font-black text-blue-800 dark:text-blue-400 hover:text-red-600 hover:underline leading-tight"
+                    >
+                      {prov.provinceName}
+                    </Link>
+                    {resolvedCode && (
+                      <span className="mt-0.5 block text-[11px] font-bold tracking-wide text-muted-foreground">
+                        Mã: {resolvedCode}
+                      </span>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -129,8 +183,9 @@ export function RegionLotteryBoard({
               const isSpecial =
                 prizeTpl.prizeName.includes('Đặc Biệt') || prizeTpl.prizeName.includes('G.ĐB');
               const isEighth = prizeTpl.prizeName.includes('G.Tám');
+              const isFourCol = orderedResults.length >= 4;
               const rowBg = isSpecial
-                ? 'bg-red-50/80 dark:bg-red-950/25 font-bold'
+                ? 'bg-red-50/85 dark:bg-red-950/25 font-bold'
                 : prizeIdx % 2 === 0
                 ? 'bg-card'
                 : 'bg-muted/20';
@@ -145,11 +200,11 @@ export function RegionLotteryBoard({
                   {/* Cột tên giải bên trái */}
                   <th
                     scope="row"
-                    className={`sticky left-0 z-10 w-24 border-r px-2 py-2.5 text-center text-xs font-bold ${stickyBg} ${
+                    className={`sticky left-0 z-10 w-[78px] sm:w-[90px] border-r px-1.5 py-2.5 text-center text-xs font-bold ${stickyBg} ${
                       isSpecial
                         ? 'text-red-700 dark:text-red-400 font-extrabold'
                         : isEighth
-                        ? 'text-red-600 dark:text-red-400 font-bold'
+                        ? 'text-red-600 dark:text-red-400 font-extrabold'
                         : 'text-foreground'
                     }`}
                   >
@@ -162,34 +217,62 @@ export function RegionLotteryBoard({
                   </th>
 
                   {/* Cột các số trúng thưởng của từng tỉnh */}
-                  {results.map((prov) => {
+                  {orderedResults.map((prov) => {
                     const rowData = prov.prizes[prizeIdx];
                     const numbers = rowData ? rowData.numbers : [];
+                    const count = numbers.length;
+                    const isDenseRow = count >= 3;
+
+                    // Chọn bố cục CSS Grid thẳng cột chuẩn Minh Ngọc (loại bỏ dấu · gây lệch hàng)
+                    let gridClass = 'flex items-center justify-center';
+                    if (count === 7) {
+                      // Giải Tư (7 lô): 3 hàng x 2 số thẳng cột + hàng cuối 1 số ở giữa
+                      gridClass = 'grid grid-cols-2 gap-x-1.5 sm:gap-x-3 gap-y-1.5 items-center justify-items-center';
+                    } else if (count === 3) {
+                      // Giải Sáu (3 lô): 3 cột đều nhau
+                      gridClass = 'grid grid-cols-3 gap-x-1 sm:gap-x-2 gap-y-1 items-center justify-items-center';
+                    } else if (count === 2) {
+                      // Giải Ba (2 lô): 2 cột đều nhau thẳng hàng với Giải Tư
+                      gridClass = 'grid grid-cols-2 gap-x-1.5 sm:gap-x-3 gap-y-1 items-center justify-items-center';
+                    } else if (count === 6) {
+                      // Miền Bắc G.Ba / G.Năm (6 lô): 2 hàng x 3 cột đều nhau
+                      gridClass = 'grid grid-cols-3 gap-x-2 sm:gap-x-4 gap-y-1.5 items-center justify-items-center';
+                    } else if (count === 4) {
+                      // Miền Bắc G.Tư / G.Bảy (4 lô): 4 cột đều nhau
+                      gridClass = 'grid grid-cols-2 sm:grid-cols-4 gap-x-2 sm:gap-x-4 gap-y-1 items-center justify-items-center';
+                    }
 
                     return (
                       <td
-                        key={prov.provinceCode}
-                        className="border-r last:border-r-0 px-3 py-2.5 text-center align-middle"
+                        key={prov.provinceId || prov.provinceCode}
+                        className={`border-r last:border-r-0 text-center align-middle ${
+                          isFourCol ? 'px-1.5 py-2.5' : 'px-2 sm:px-3 py-2.5'
+                        }`}
                       >
-                        <div
-                          className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-1 ${
-                            numbers.length > 3 ? 'max-w-md mx-auto' : ''
-                          }`}
-                        >
-                          {numbers.map((num, nIdx) => (
-                            <React.Fragment key={nIdx}>
-                              <PrizeCell
-                                numberStr={num}
-                                mode={mode}
-                                highlightDigit={highlightDigit}
-                                isSpecial={isSpecial}
-                                isEighth={isEighth}
-                              />
-                              {nIdx < numbers.length - 1 && numbers.length > 2 && (
-                                <span className="text-muted-foreground/40 text-xs hidden sm:inline">·</span>
-                              )}
-                            </React.Fragment>
-                          ))}
+                        <div className={gridClass}>
+                          {numbers.map((num, nIdx) => {
+                            const isLastOddInTwoCol = count === 7 && nIdx === 6;
+                            return (
+                              <div
+                                key={nIdx}
+                                className={
+                                  isLastOddInTwoCol
+                                    ? 'col-span-2 flex justify-center'
+                                    : 'flex justify-center'
+                                }
+                              >
+                                <PrizeCell
+                                  numberStr={num}
+                                  mode={mode}
+                                  highlightDigit={highlightDigit}
+                                  isSpecial={isSpecial}
+                                  isEighth={isEighth}
+                                  isCompact={isFourCol}
+                                  isDenseRow={isDenseRow}
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
                       </td>
                     );
@@ -202,7 +285,7 @@ export function RegionLotteryBoard({
       </div>
 
       {/* Bảng Lô Tô Đầu Đuôi đính kèm phía dưới */}
-      <LotoHeadTailTable provinces={results} highlightDigit={highlightDigit} />
+      <LotoHeadTailTable provinces={orderedResults} highlightDigit={highlightDigit} />
     </section>
   );
 }

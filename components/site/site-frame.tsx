@@ -8,6 +8,7 @@ import { SiteFooter } from './site-footer';
 import { getLotteryResults } from '@/lib/mock-lottery-data';
 import { audioSynth } from '@/lib/audio-synthesizer';
 import { formatDate } from '@/lib/format';
+import { toRouteDate } from '@/lib/lottery-date';
 
 export function SiteFrame({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -65,6 +66,8 @@ export function SiteFrame({ children }: { children: React.ReactNode }) {
     <div className={`min-h-screen bg-background text-foreground ${dark ? 'dark' : ''}`}>
       <MinhLuanHeader
         activeDateStr={activeDateStr}
+        activeDate={new Date()}
+        onSelectDate={(d) => router.push('/ngay/' + toRouteDate(d))}
         allProvinces={allProvinces}
         activeRegionTab="all"
         onSelectRegionTab={handleSelectRegionTab}
