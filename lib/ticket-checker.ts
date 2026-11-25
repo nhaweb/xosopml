@@ -26,14 +26,15 @@ export function checkTicket(ticketNumber: string, result: ProvinceDrawResult): T
   const specialPrize = result.prizes.find(
     (p) => p.prizeName.includes('Đặc Biệt') || p.prizeName.includes('G.ĐB')
   );
-  const specialNumber = specialPrize?.numbers[0];
+  const rawSpecial = specialPrize?.numbers[0]?.replace(/\D/g, '') || '';
+  const specialNumber = rawSpecial.length >= 5 ? rawSpecial : undefined;
 
   // 1. Kiểm tra trúng Giải Đặc Biệt
   if (specialNumber && cleanTicket === specialNumber) {
     return {
       isWinner: true,
-      prizeName: specialPrize.prizeName,
-      rewardAmount: specialPrize.rewardAmount || 'Giải thưởng cực lớn',
+      prizeName: specialPrize?.prizeName || 'Giải Đặc Biệt',
+      rewardAmount: specialPrize?.rewardAmount || 'Giải thưởng cực lớn',
       matchedNumber: specialNumber,
       details: `Chúc mừng! Vé ${cleanTicket} trúng Giải Đặc Biệt!`,
     };
@@ -69,12 +70,21 @@ export function checkTicket(ticketNumber: string, result: ProvinceDrawResult): T
     }
   }
 
-  // 4. Đối chiếu từ các giải cao đến giải thấp theo đuôi số
-  for (const prize of result.prizes) {
-    if (prize === specialPrize) continue;
+  // 4. Đối chiếu từ các giải cao đến giải thấp theo độ dài số (ưu tiên giải cao nhất trước)
+  const sortedPrizes = [...result.prizes]
+    .filter((p) => p !== specialPrize)
+    .sort((a, b) => {
+      const lenA = (a.numbers[0] || '').replace(/\D/g, '').length;
+      const lenB = (b.numbers[0] || '').replace(/\D/g, '').length;
+      if (lenB !== lenA) return lenB - lenA;
+      return b.prizeOrder - a.prizeOrder;
+    });
 
-    for (const winningNum of prize.numbers) {
+  for (const prize of sortedPrizes) {
+    for (const rawWinningNum of prize.numbers) {
+      const winningNum = rawWinningNum.replace(/\D/g, '');
       const matchLen = winningNum.length;
+      if (matchLen < 2) continue;
       // Lấy đuôi số của vé tương ứng với độ dài số giải thưởng
       if (cleanTicket.length >= matchLen) {
         const ticketTail = cleanTicket.slice(-matchLen);

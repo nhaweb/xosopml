@@ -29,16 +29,24 @@ export default function SoDauDuoiPage() {
               dateStr: item.dateStr,
               dayOfWeek: item.dayOfWeek,
               specialTails: (item.results || []).map((p) => {
-                const sp = p.prizes.find((pz) => pz.prizeName.includes('Đặc Biệt'));
-                const eg = p.prizes.find(
-                  (pz) => pz.prizeName.includes('G.Tám') || pz.prizeName.includes('G.Bảy')
+                const sp = p.prizes.find(
+                  (pz) => pz.prizeName.includes('Đặc Biệt') || pz.prizeName.includes('G.ĐB')
                 );
-                const spNum = sp?.numbers[0] || '00';
-                const egNum = eg?.numbers[0] || '00';
+                const eg = p.prizes.find((pz) =>
+                  region === 'north'
+                    ? pz.prizeName.includes('G.Bảy') || pz.prizeName.includes('Giải Bảy')
+                    : pz.prizeName.includes('G.Tám') || pz.prizeName.includes('Giải Tám')
+                );
+                const spDigits = (sp?.numbers[0] || '').replace(/\D/g, '');
+                const specialTail = spDigits.length >= 2 ? spDigits.slice(-2) : '--';
+                const egNums = (eg?.numbers || [])
+                  .map((n) => n.replace(/\D/g, '').slice(-2))
+                  .filter((n) => n.length === 2);
+                const eightTail = egNums.length > 0 ? egNums.join(' · ') : '--';
                 return {
                   province: p.provinceName,
-                  specialTail: spNum.slice(-2),
-                  eightTail: egNum.slice(-2),
+                  specialTail,
+                  eightTail,
                 };
               }),
             })
@@ -61,7 +69,7 @@ export default function SoDauDuoiPage() {
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
             <ScrollText className="size-4" />
-            Sớ Đầu Đuôi Minh Luân
+            Sớ Đầu Đuôi
           </div>
           <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl text-foreground">
             Sớ Lô Tô Giải Đặc Biệt &amp; Giải 8

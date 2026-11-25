@@ -4,7 +4,7 @@ import { siteConfig } from '@/config/site';
 
 export function SiteFooter() {
   return (
-    <footer className="mt-10 border-t border-slate-800 bg-[#0b162c] text-slate-200">
+    <footer className="mt-10 border-t border-slate-800 bg-[#0b162c] text-slate-200 print:hidden">
       <div className="mx-auto max-w-[1260px] px-4 py-10 lg:px-6">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Cột 1: THƯƠNG HIỆU */}
@@ -89,7 +89,7 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link href="/so-mo" className="transition-colors hover:text-amber-400">
-                  Sổ mơ lô đề &amp; Con số phong thủy
+                  Giải mã giấc mơ &amp; Con số phong thủy
                 </Link>
               </li>
               <li>

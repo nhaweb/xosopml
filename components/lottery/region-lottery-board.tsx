@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { ProvinceDrawResult } from '@/types/lottery';
-import { resolveProvinceCode, sortProvincesCanonical } from '@/config/lottery-provinces';
+import { PROVINCES, resolveProvinceCode, sortProvincesCanonical } from '@/config/lottery-provinces';
 import { DigitFilterBar } from './digit-filter-bar';
 import { PrizeCell } from './prize-cell';
 import { LotoHeadTailTable } from './loto-head-tail-table';
@@ -58,11 +58,22 @@ export function RegionLotteryBoard({
     }
   };
 
-  const regionSlug = id.includes('xsmn')
-    ? 'mien-nam'
-    : id.includes('xsmt')
-    ? 'mien-trung'
-    : 'mien-bac';
+  const inferredRegion =
+    id.includes('xsmn')
+      ? 'south'
+      : id.includes('xsmt')
+      ? 'central'
+      : id.includes('xsmb')
+      ? 'north'
+      : PROVINCES.find((p) => p.id === orderedResults[0]?.provinceId)?.region ?? 'north';
+
+  const regionSlug =
+    inferredRegion === 'south'
+      ? 'mien-nam'
+      : inferredRegion === 'central'
+      ? 'mien-trung'
+      : 'mien-bac';
+  const isNorth = inferredRegion === 'north';
 
   return (
     <section id={id} className="overflow-hidden rounded-xl border border-red-800/30 bg-card shadow-sm transition-shadow hover:shadow-md">
@@ -183,6 +194,9 @@ export function RegionLotteryBoard({
               const isSpecial =
                 prizeTpl.prizeName.includes('Đặc Biệt') || prizeTpl.prizeName.includes('G.ĐB');
               const isEighth = prizeTpl.prizeName.includes('G.Tám');
+              const isSeventh =
+                isNorth &&
+                (prizeTpl.prizeName.includes('G.Bảy') || prizeTpl.prizeName.includes('Giải Bảy'));
               const isFourCol = orderedResults.length >= 4;
               const rowBg = isSpecial
                 ? 'bg-red-50/85 dark:bg-red-950/25 font-bold'
@@ -203,7 +217,7 @@ export function RegionLotteryBoard({
                     className={`sticky left-0 z-10 w-[78px] sm:w-[90px] border-r px-1.5 py-2.5 text-center text-xs font-bold ${stickyBg} ${
                       isSpecial
                         ? 'text-red-700 dark:text-red-400 font-extrabold'
-                        : isEighth
+                        : isEighth || isSeventh
                         ? 'text-red-600 dark:text-red-400 font-extrabold'
                         : 'text-foreground'
                     }`}
@@ -224,8 +238,12 @@ export function RegionLotteryBoard({
                     const isDenseRow = count >= 3;
 
                     // Chọn bố cục CSS Grid thẳng cột chuẩn Minh Ngọc (loại bỏ dấu · gây lệch hàng)
+                    const isSingleSouthCentral = !isNorth && orderedResults.length === 1;
                     let gridClass = 'flex items-center justify-center';
-                    if (count === 7) {
+                    if (isSingleSouthCentral && count === 7) {
+                      // Chi tiết 1 đài: 7 lô Giải Tư trải đều toàn chiều rộng ô (7 cột trên desktop, cân đều trên mobile)
+                      gridClass = 'flex flex-wrap sm:grid sm:grid-cols-7 w-full items-center justify-evenly sm:justify-items-center gap-x-3 gap-y-2';
+                    } else if (count === 7) {
                       // Giải Tư (7 lô): 3 hàng x 2 số thẳng cột + hàng cuối 1 số ở giữa
                       gridClass = 'grid grid-cols-2 gap-x-1.5 sm:gap-x-3 gap-y-1.5 items-center justify-items-center';
                     } else if (count === 3) {
@@ -251,7 +269,7 @@ export function RegionLotteryBoard({
                       >
                         <div className={gridClass}>
                           {numbers.map((num, nIdx) => {
-                            const isLastOddInTwoCol = count === 7 && nIdx === 6;
+                            const isLastOddInTwoCol = !isSingleSouthCentral && count === 7 && nIdx === 6;
                             return (
                               <div
                                 key={nIdx}
@@ -267,6 +285,7 @@ export function RegionLotteryBoard({
                                   highlightDigit={highlightDigit}
                                   isSpecial={isSpecial}
                                   isEighth={isEighth}
+                                  isSeventh={isSeventh}
                                   isCompact={isFourCol}
                                   isDenseRow={isDenseRow}
                                 />

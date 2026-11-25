@@ -767,6 +767,57 @@ export async function fetchRegionDrawsHistory(
   region: Region,
   daysCount = 14
 ): Promise<XoSoServiceEnvelope<Array<{ date: string; dateStr: string; dayOfWeek: string; results: ProvinceDrawResult[] }>>> {
+  const { isLiveWindow, revalidateSeconds } = getSmartRevalidateSeconds();
+  const cacheKey = `region_history_v3_${region}_${daysCount}`;
+
+  const cached = memoryCache.get(cacheKey) as
+    | MemoryCacheEntry<Array<{ date: string; dateStr: string; dayOfWeek: string; results: ProvinceDrawResult[] }>>
+    | undefined;
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.envelope;
+  }
+
+  const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  const dates: Date[] = [];
+  const base = new Date();
+  for (let i = 0; i < daysCount; i++) {
+    dates.push(new Date(base.getFullYear(), base.getMonth(), base.getDate() - i, 12, 0, 0));
+  }
+
+  const dayEnvelopes = await Promise.all(dates.map((d) => fetchLotteryResultsByDate(d)));
+
+  const rows = dayEnvelopes.map((env, idx) => {
+    const d = dates[idx];
+    const results =
+      region === 'north' ? env.data.north : region === 'central' ? env.data.central : env.data.south;
+    return {
+      date: d.toISOString(),
+      dateStr: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+      dayOfWeek: weekdays[d.getDay()],
+      results,
+    };
+  });
+
+  const hasLiveSource = dayEnvelopes.some((env) => env.source === 'xosoapi.online');
+  const envelope: XoSoServiceEnvelope<typeof rows> = {
+    data: rows,
+    source: hasLiveSource ? 'xosoapi.online' : 'fallback',
+    isLiveWindow,
+    revalidateSeconds,
+    fetchedAt: new Date().toISOString(),
+  };
+  memoryCache.set(cacheKey, {
+    expiresAt: Date.now() + revalidateSeconds * 1000,
+    envelope,
+  });
+  return envelope;
+}
+
+/* legacy region history disabled */
+async function _legacyFetchRegionDrawsHistory(
+  region: Region,
+  daysCount = 14
+): Promise<XoSoServiceEnvelope<Array<{ date: string; dateStr: string; dayOfWeek: string; results: ProvinceDrawResult[] }>>> {
   const apiRegion = region === 'north' ? 'MB' : region === 'central' ? 'MT' : 'MN';
   const limit = region === 'north' ? daysCount + 2 : daysCount * 4;
   const { isLiveWindow, revalidateSeconds } = getSmartRevalidateSeconds();
@@ -1147,7 +1198,7 @@ export async function fetchFrequencyStats(
   const province = PROVINCES.find((p) => p.id === provinceId) || PROVINCES[0];
   const apiRegion = province.region === 'north' ? 'MB' : province.region === 'central' ? 'MT' : 'MN';
   const { isLiveWindow, revalidateSeconds } = getSmartRevalidateSeconds();
-  const cacheKey = `stats_freq_v3_${province.id}_${safeLimit}_${mode}`;
+  const cacheKey = `stats_freq_v4_${province.id}_${safeLimit}_${mode}`;
 
   const cached = memoryCache.get(cacheKey) as MemoryCacheEntry<FrequencyStatItem[]> | undefined;
   if (cached && cached.expiresAt > Date.now()) {
@@ -1166,7 +1217,10 @@ export async function fetchFrequencyStats(
     for (const entry of historyEnv.data) {
       for (const prize of entry.result.prizes) {
         const isSpecial = prize.prizeName.includes('Đặc Biệt') || prize.prizeName.includes('G.ĐB');
-        const isFirstTail = prize.prizeName.includes('G.Tám') || prize.prizeName.includes('G.Bảy');
+        const isFirstTail =
+          province.region === 'north'
+            ? prize.prizeName.includes('G.Bảy')
+            : prize.prizeName.includes('G.Tám');
 
         if (mode === 'special' && !isSpecial) continue;
         if (mode === 'head-tail' && !isSpecial && !isFirstTail) continue;
@@ -1266,7 +1320,10 @@ export async function fetchFrequencyStats(
     drawsCounted++;
     for (const prize of draw.prizes) {
       const isSpecial = prize.prizeName.includes('Đặc Biệt') || prize.prizeName.includes('G.ĐB');
-      const isFirstTail = prize.prizeName.includes('G.Tám') || prize.prizeName.includes('G.Bảy');
+      const isFirstTail =
+        province.region === 'north'
+          ? prize.prizeName.includes('G.Bảy')
+          : prize.prizeName.includes('G.Tám');
       if (mode === 'special' && !isSpecial) continue;
       if (mode === 'head-tail' && !isSpecial && !isFirstTail) continue;
 

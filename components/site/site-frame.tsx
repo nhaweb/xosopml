@@ -5,23 +5,37 @@ import { useRouter } from 'next/navigation';
 import { MinhLuanHeader } from '@/components/minhluan/minhluan-header';
 import { TicketCheckerModal } from '@/components/lottery/ticket-checker-modal';
 import { SiteFooter } from './site-footer';
-import { getLotteryResults } from '@/lib/mock-lottery-data';
+import { getFallbackLotteryResults } from '@/lib/fallback-lottery-data';
 import { audioSynth } from '@/lib/audio-synthesizer';
 import { formatDate } from '@/lib/format';
-import { toRouteDate } from '@/lib/lottery-date';
+import { DayLotteryData } from '@/types/lottery';
 
 export function SiteFrame({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [dark, setDark] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [checkerOpen, setCheckerOpen] = useState(false);
+  const [todayData, setTodayData] = useState<DayLotteryData>(() =>
+    getFallbackLotteryResults(new Date())
+  );
 
-  const todayData = useMemo(() => getLotteryResults(new Date()), []);
+  useEffect(() => {
+    const vn = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const iso = `${vn.getUTCFullYear()}-${String(vn.getUTCMonth() + 1).padStart(2, '0')}-${String(vn.getUTCDate()).padStart(2, '0')}`;
+    fetch(`/api/xoso/draws?date=${iso}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.data) setTodayData(json.data);
+      })
+      .catch(() => {});
+  }, []);
+
   const allProvinces = useMemo(
     () => [...todayData.south, ...todayData.central, ...todayData.north],
     [todayData]
   );
-  const activeDateStr = useMemo(() => formatDate(new Date()), []);
+  const activeDate = useMemo(() => new Date(), []);
+  const activeDateStr = useMemo(() => formatDate(activeDate), [activeDate]);
 
   useEffect(() => {
     try {
@@ -66,8 +80,7 @@ export function SiteFrame({ children }: { children: React.ReactNode }) {
     <div className={`min-h-screen bg-background text-foreground ${dark ? 'dark' : ''}`}>
       <MinhLuanHeader
         activeDateStr={activeDateStr}
-        activeDate={new Date()}
-        onSelectDate={(d) => router.push('/ngay/' + toRouteDate(d))}
+        activeDate={activeDate}
         allProvinces={allProvinces}
         activeRegionTab="all"
         onSelectRegionTab={handleSelectRegionTab}
@@ -84,6 +97,7 @@ export function SiteFrame({ children }: { children: React.ReactNode }) {
         isOpen={checkerOpen}
         onClose={() => setCheckerOpen(false)}
         availableResults={allProvinces}
+        activeDate={activeDate}
       />
 
       <SiteFooter />

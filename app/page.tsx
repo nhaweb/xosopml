@@ -93,6 +93,12 @@ export default function Page() {
           setActiveDate(new Date(y, m - 1, d, 12, 0, 0));
         }
       }
+      if (window.location.hash === '#vietlott') {
+        setActiveRegionTab('vietlott');
+        setTimeout(() => {
+          document.getElementById('vietlott')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+      }
     }
   }, []);
 
@@ -136,6 +142,12 @@ export default function Page() {
       });
     } finally {
       setIsLoading(false);
+      if (window.location.hash === '#vietlott') {
+        setActiveRegionTab('vietlott');
+        setTimeout(() => {
+          document.getElementById('vietlott')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+      }
     }
   }, []);
 
@@ -170,8 +182,18 @@ export default function Page() {
 
   const handleSelectRegionTab = (tab: 'all' | 'south' | 'central' | 'north' | 'vietlott') => {
     setActiveRegionTab(tab);
-    if (tab === 'south' || tab === 'central' || tab === 'north') {
+    if (tab === 'all') {
+      setPriorityRegion('south');
+      setLookupBoard(null);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else if (tab === 'south' || tab === 'central' || tab === 'north') {
       setPriorityRegion(tab);
+    } else if (tab === 'vietlott' && typeof document !== 'undefined') {
+      setTimeout(() => {
+        document.getElementById('vietlott')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
     }
   };
 
@@ -501,6 +523,13 @@ export default function Page() {
               </div>
             )}
 
+            {/* Khối Điện toán Vietlott & Keno đưa lên đầu khi chọn tab Vietlott */}
+            {activeRegionTab === 'vietlott' && (
+              <div id="vietlott" className="mb-6">
+                <VietlottKenoWidget />
+              </div>
+            )}
+
             {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (3 MIỀN) HOẶC SKELETON LOADING */}
             {activeRegionTab !== 'vietlott' && (
               isLoading ? (
@@ -602,9 +631,11 @@ export default function Page() {
             </div>
 
             {/* Khối Điện toán Vietlott & Keno */}
-            <div id="vietlott" className="mt-6">
-              <VietlottKenoWidget />
-            </div>
+            {activeRegionTab !== 'vietlott' && (
+              <div id="vietlott" className="mt-6">
+                <VietlottKenoWidget />
+              </div>
+            )}
 
             {/* Lịch Mở Thưởng 3 Miền Trong Tuần */}
             <div id="lich-mo-thuong" className="mt-6">
@@ -623,6 +654,7 @@ export default function Page() {
         isOpen={checkerOpen}
         onClose={() => setCheckerOpen(false)}
         availableResults={allProvinces}
+        activeDate={activeDate}
       />
 
       <SiteFooter />

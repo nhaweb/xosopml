@@ -9,6 +9,7 @@ interface PrizeCellProps {
   highlightDigit: number | null;
   isSpecial?: boolean;
   isEighth?: boolean;
+  isSeventh?: boolean;
   isCompact?: boolean;
   isDenseRow?: boolean;
 }
@@ -19,6 +20,7 @@ export function PrizeCell({
   highlightDigit,
   isSpecial = false,
   isEighth = false,
+  isSeventh = false,
   isCompact = false,
   isDenseRow = false,
 }: PrizeCellProps) {
@@ -36,7 +38,7 @@ export function PrizeCell({
     sizeClasses = isCompact
       ? 'text-xl sm:text-2xl font-black tracking-wide text-red-600 dark:text-red-400 leading-tight'
       : 'text-2xl sm:text-[26px] md:text-[28px] font-black tracking-wide text-red-600 dark:text-red-400 leading-tight';
-  } else if (isEighth) {
+  } else if (isEighth || isSeventh) {
     sizeClasses = isCompact
       ? 'text-xl sm:text-2xl font-black tracking-wide text-red-600 dark:text-red-400 leading-tight'
       : 'text-2xl sm:text-[26px] md:text-[28px] font-black tracking-wide text-red-600 dark:text-red-400 leading-tight';

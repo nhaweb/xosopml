@@ -36,11 +36,12 @@ export default function SoMoPage() {
       <div className="mb-6">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
           <BookOpen className="size-4" />
-          Sổ mơ lô đề
+          Sổ mơ
         </div>
-        <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl">Tra cứu giấc mơ</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          {DREAM_ENTRIES.length} giấc mơ phổ biến, kèm các cặp số thường được người chơi đối chiếu. Nội dung chỉ để tham khảo.
+        <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl">Giải mã giấc mơ</h1>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          {DREAM_ENTRIES.length} giấc mơ phổ biến, kèm các cặp số thường được người chơi đối chiếu. Nội dung chỉ để{' '}
+          <span className="whitespace-nowrap">tham khảo.</span>
         </p>
       </div>
 

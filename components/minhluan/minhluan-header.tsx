@@ -85,69 +85,119 @@ export function MinhLuanHeader({
   const [selectedProvId, setSelectedProvId] = useState<string>('');
   const [ticketNum, setTicketNum] = useState<string>('');
   const [checkResult, setCheckResult] = useState<TicketMatchResult | null>(null);
+  const [liveProvincesForDate, setLiveProvincesForDate] = useState<ProvinceDrawResult[] | null>(null);
+  const [isCheckingTicket, setIsCheckingTicket] = useState<boolean>(false);
+
+  const effectiveProvinces =
+    liveProvincesForDate && liveProvincesForDate.length > 0 ? liveProvincesForDate : allProvinces;
+
+  const activeDateIso = activeDate ? toIsoDateString(activeDate) : '';
 
   React.useEffect(() => {
-    if (activeDate) {
-      setSelectedDateIso(toIsoDateString(activeDate));
+    if (activeDateIso) {
+      setSelectedDateIso(activeDateIso);
+      setLiveProvincesForDate(null);
     } else if (activeDateStr) {
       const match = activeDateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
       if (match) {
         const [, day, mon, yr] = match;
         setSelectedDateIso(`${yr}-${mon.padStart(2, '0')}-${day.padStart(2, '0')}`);
+        setLiveProvincesForDate(null);
       }
     }
-  }, [activeDate, activeDateStr]);
+  }, [activeDateIso, activeDateStr]);
 
   React.useEffect(() => {
-    if (allProvinces.length > 0) {
-      const exists = allProvinces.some((p) => p.provinceId === selectedProvId);
+    if (effectiveProvinces.length > 0) {
+      const exists = effectiveProvinces.some((p) => p.provinceId === selectedProvId);
       if (!exists) {
-        setSelectedProvId(allProvinces[0].provinceId);
+        setSelectedProvId(effectiveProvinces[0].provinceId);
       }
     }
-  }, [allProvinces, selectedProvId]);
+  }, [effectiveProvinces, selectedProvId]);
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const todayIso = (() => {
+    const vn = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    return `${vn.getUTCFullYear()}-${String(vn.getUTCMonth() + 1).padStart(2, '0')}-${String(vn.getUTCDate()).padStart(2, '0')}`;
+  })();
+
+  const fetchProvincesForIsoDate = async (isoDate: string): Promise<ProvinceDrawResult[]> => {
+    try {
+      const res = await fetch(`/api/xoso/draws?date=${isoDate}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data) {
+          const list: ProvinceDrawResult[] = [
+            ...(json.data.south || []),
+            ...(json.data.central || []),
+            ...(json.data.north || []),
+          ];
+          setLiveProvincesForDate(list);
+          return list;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return effectiveProvinces;
+  };
+
+  const handleDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (!val) return;
+    if (!val || val > todayIso) return;
     setSelectedDateIso(val);
+    setCheckResult(null);
     const [y, m, d] = val.split('-').map(Number);
     if (!y || !m || !d) return;
     const picked = new Date(y, m - 1, d, 12, 0, 0);
 
     if (onSelectDate) {
       onSelectDate(picked);
-    } else if (pathname === '/') {
-      router.push(`/?date=${val}`);
-    } else {
-      router.push(`/ngay/${val}`);
     }
+    await fetchProvincesForIsoDate(val);
   };
 
   const handleQuickLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push('/dashboard');
+    router.push('/login');
   };
 
-  const handleInlineCheck = (e: React.FormEvent) => {
+  const handleGoHome = () => {
+    onSelectRegionTab('all');
+    if (typeof window !== 'undefined' && window.location.hash) {
+      window.history.replaceState(null, '', pathname || '/');
+    }
+  };
+
+  const handleInlineCheck = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetProv =
-      allProvinces.find((p) => p.provinceId === selectedProvId) || allProvinces[0];
-    if (!targetProv) return;
-    const res = checkTicket(ticketNum, targetProv);
-    setCheckResult(res);
-    if (res.isWinner) {
-      audioSynth.playWinFanfare();
+    setIsCheckingTicket(true);
+    try {
+      const latestList = await fetchProvincesForIsoDate(selectedDateIso);
+      const pool = latestList.length > 0 ? latestList : effectiveProvinces;
+      const targetProv = pool.find((p) => p.provinceId === selectedProvId) || pool[0];
+      if (!targetProv) return;
+      const res = checkTicket(ticketNum, targetProv);
+      setCheckResult(res);
+      if (res.isWinner) {
+        audioSynth.playWinFanfare();
+      }
+    } finally {
+      setIsCheckingTicket(false);
     }
   };
 
   return (
-    <header className="border-b bg-card shadow-xs">
+    <header className="border-b bg-card shadow-xs print:hidden">
       {/* #1: Top Utility & Quick Login Bar */}
       <div className="border-b bg-muted/40 text-[11px] text-foreground">
         <div className="mx-auto flex max-w-[1260px] flex-wrap items-center justify-between gap-2 px-3 py-1.5 lg:px-4">
           <div className="flex flex-wrap items-center gap-1 font-semibold">
-            <Link href="/" className="font-black text-red-700 dark:text-red-400 hover:underline">
+            <Link
+              href="/"
+              onClick={handleGoHome}
+              className="font-black text-red-700 dark:text-red-400 hover:underline"
+            >
               Xổ Số Minh Luân
             </Link>
             <span className="text-muted-foreground">»</span>
@@ -167,11 +217,13 @@ export function MinhLuanHeader({
           </div>
 
           <form onSubmit={handleQuickLogin} className="hidden items-center gap-1.5 lg:flex">
-            <Link href="/dashboard" className="font-bold text-blue-600 dark:text-blue-400 hover:underline">
+            <Link href="/register" className="font-bold text-blue-600 dark:text-blue-400 hover:underline">
               Đăng ký
             </Link>
             <span className="text-muted-foreground">|</span>
-            <span className="font-semibold">Đăng nhập</span>
+            <Link href="/login" className="font-semibold hover:text-red-600 hover:underline">
+              Đăng nhập
+            </Link>
             <input
               type="text"
               placeholder="Tên đăng nhập"
@@ -217,6 +269,7 @@ export function MinhLuanHeader({
           <div className="flex items-center justify-between lg:col-span-4">
             <Link
               href="/"
+              onClick={handleGoHome}
               className="flex w-full items-center justify-center overflow-hidden rounded-lg border border-amber-500/40 bg-[#7d0000] shadow-sm hover:opacity-95 transition-opacity"
             >
               <img
@@ -239,12 +292,18 @@ export function MinhLuanHeader({
 
           {/* Center: Canh giữa nội dung Chuyên trang kết quả... và Menu 5 nút ở dưới */}
           <div className="flex flex-col items-center justify-center text-center lg:col-span-4">
-            <div className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wide text-foreground/80">
-              CHUYÊN TRANG KẾT QUẢ XỔ SỐ KIẾN THIẾT
-            </div>
-            <div className="mt-0.5 text-2xl sm:text-3xl font-extrabold uppercase tracking-wide text-[#a80808] dark:text-red-400">
-              MINH LUÂN
-            </div>
+            <Link
+              href="/"
+              onClick={handleGoHome}
+              className="group block cursor-pointer transition-opacity hover:opacity-90"
+            >
+              <div className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wide text-foreground/80">
+                CHUYÊN TRANG KẾT QUẢ XỔ SỐ KIẾN THIẾT
+              </div>
+              <div className="mt-0.5 text-2xl sm:text-3xl font-extrabold uppercase tracking-wide text-[#a80808] dark:text-red-400 group-hover:underline">
+                MINH LUÂN
+              </div>
+            </Link>
 
             {/* Menu 5 nút ở dưới canh giữa */}
             <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1">
@@ -289,6 +348,7 @@ export function MinhLuanHeader({
                     <input
                       id="header-date-input"
                       type="date"
+                      max={todayIso}
                       value={selectedDateIso}
                       onChange={handleDateChange}
                       className="w-full rounded border border-input bg-background px-1 py-0.5 text-[11px] font-mono font-bold text-foreground outline-none focus:border-red-500 cursor-pointer shadow-2xs"
@@ -306,7 +366,7 @@ export function MinhLuanHeader({
                       className="w-full rounded border border-input bg-background px-1 py-0.5 text-[11px] font-semibold text-foreground outline-none focus:border-red-500 cursor-pointer shadow-2xs"
                     >
                       <option value="">Chọn tỉnh</option>
-                      {allProvinces.map((p) => (
+                      {effectiveProvinces.map((p) => (
                         <option key={p.provinceId} value={p.provinceId}>
                           {p.provinceName}
                         </option>
@@ -319,35 +379,53 @@ export function MinhLuanHeader({
                   <span className="shrink-0 font-semibold text-muted-foreground text-[11px]">Vé Số:</span>
                   <input
                     type="text"
+                    inputMode="numeric"
                     maxLength={6}
                     placeholder="Nhập 6 số vé..."
                     value={ticketNum}
-                    onChange={(e) => setTicketNum(e.target.value.replace(/\D/g, ''))}
+                    onChange={(e) => setTicketNum(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     className="flex-1 rounded border border-input bg-background px-2 py-1 font-mono text-xs font-black tracking-widest outline-none focus:border-red-500"
                   />
                   <button
                     type="submit"
-                    className="shrink-0 rounded-full bg-gradient-to-b from-[#c81010] to-[#990000] px-3.5 py-1 text-[11px] font-extrabold text-white shadow-xs hover:from-[#dc1414] hover:to-[#b30000] transition-all"
+                    disabled={isCheckingTicket}
+                    className="shrink-0 rounded-full bg-gradient-to-b from-[#c81010] to-[#990000] px-3.5 py-1 text-[11px] font-extrabold text-white shadow-xs hover:from-[#dc1414] hover:to-[#b30000] disabled:opacity-60 transition-all"
                   >
-                    Dò Kết Quả
+                    {isCheckingTicket ? 'Đang dò...' : 'Dò Kết Quả'}
                   </button>
                 </div>
 
                 {checkResult && (
                   <div
-                    className={`flex items-start justify-between gap-2 rounded-md border px-2 py-1 text-[11px] ${
+                    className={`flex items-start justify-between gap-2 rounded-md border px-2 py-1.5 text-[11px] ${
                       checkResult.isWinner
                         ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
                         : 'border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex-1">
                       {checkResult.isWinner ? (
-                        <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600" />
+                        <div className="space-y-0.5 text-center">
+                          <div className="flex items-center justify-center gap-1 font-bold">
+                            <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600" />
+                            <span>
+                              {checkResult.prizeName === 'Giải Phụ Đặc Biệt'
+                                ? 'Trúng giải phụ Đặc Biệt.'
+                                : checkResult.details}
+                            </span>
+                          </div>
+                          {checkResult.rewardAmount && (
+                            <div className="text-center text-xs font-black text-red-600 dark:text-red-400">
+                              Trị giá {checkResult.rewardAmount.replace(/\s+đ$/, 'đ')}
+                            </div>
+                          )}
+                        </div>
                       ) : (
-                        <XCircle className="size-3.5 shrink-0 text-amber-600" />
+                        <div className="flex items-center gap-1.5">
+                          <XCircle className="size-3.5 shrink-0 text-amber-600" />
+                          <span className="font-bold">{checkResult.details}</span>
+                        </div>
                       )}
-                      <span className="font-bold">{checkResult.details}</span>
                     </div>
                     <button
                       type="button"
@@ -377,6 +455,7 @@ export function MinhLuanHeader({
                 <Link
                   key={item.label}
                   href={item.href}
+                  onClick={item.href === '/' ? handleGoHome : undefined}
                   className={`px-3 py-2.5 text-[11px] font-black uppercase tracking-wide transition-colors hover:bg-black/20 ${
                     isCurrent
                       ? 'bg-black/30 text-amber-300 underline decoration-amber-300 underline-offset-4'
@@ -431,7 +510,10 @@ export function MinhLuanHeader({
                 <Link
                   key={item.label}
                   href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => {
+                    if (item.href === '/') handleGoHome();
+                    setMobileMenuOpen(false);
+                  }}
                   className={`rounded-md bg-white/5 px-3 py-2 text-xs font-bold ${
                     item.highlight ? 'text-amber-300' : 'text-white'
                   }`}

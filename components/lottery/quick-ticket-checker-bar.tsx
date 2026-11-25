@@ -65,7 +65,7 @@ export function QuickTicketCheckerBar({ provinces }: QuickTicketCheckerBarProps)
             inputMode="numeric"
             maxLength={6}
             value={ticketNum}
-            onChange={(e) => setTicketNum(e.target.value.replace(/\D/g, ''))}
+            onChange={(e) => setTicketNum(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="Nhập 5 hoặc 6 chữ số trên vé..."
             className="w-full rounded-xl border bg-background px-3.5 py-2 font-mono text-base font-black tracking-widest text-red-600 placeholder:text-muted-foreground/40 placeholder:font-normal placeholder:text-xs placeholder:tracking-normal focus:ring-2 focus:ring-red-500"
           />
@@ -95,12 +95,16 @@ export function QuickTicketCheckerBar({ provinces }: QuickTicketCheckerBarProps)
             ) : (
               <AlertCircle className="size-5 text-muted-foreground shrink-0" />
             )}
-            <div className="flex-1 flex flex-wrap items-center justify-between gap-2">
-              <span className="font-bold">{result.details}</span>
-              {result.isWinner && (
-                <span className="rounded-lg bg-red-600 text-white px-2.5 py-0.5 font-mono font-black text-xs shadow-xs">
-                  {result.rewardAmount}
-                </span>
+            <div className="flex-1 text-center">
+              <div className="font-bold">
+                {result.isWinner && result.prizeName === 'Giải Phụ Đặc Biệt'
+                  ? 'Trúng giải phụ Đặc Biệt.'
+                  : result.details}
+              </div>
+              {result.isWinner && result.rewardAmount && (
+                <div className="mt-1 inline-block rounded-lg bg-red-600 text-white px-3 py-0.5 font-mono font-black text-xs shadow-xs">
+                  Trị giá {result.rewardAmount.replace(/\s+đ$/, 'đ')}
+                </div>
               )}
             </div>
           </div>

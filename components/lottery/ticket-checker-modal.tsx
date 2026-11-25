@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Search, Sparkles, CheckCircle2, AlertCircle, Trophy } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Search, CheckCircle2, AlertCircle, Trophy } from 'lucide-react';
 import { ProvinceDrawResult } from '@/types/lottery';
 import { checkTicket, TicketMatchResult } from '@/lib/ticket-checker';
 import { audioSynth } from '@/lib/audio-synthesizer';
@@ -10,6 +10,7 @@ interface TicketCheckerModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableResults: ProvinceDrawResult[];
+  activeDate?: Date;
 }
 
 export function TicketCheckerModal({
@@ -23,11 +24,21 @@ export function TicketCheckerModal({
   );
   const [checkResult, setCheckResult] = useState<TicketMatchResult | null>(null);
 
+  useEffect(() => {
+    if (availableResults.length > 0) {
+      const exists = availableResults.some((p) => p.provinceId === selectedProvinceId);
+      if (!exists) {
+        setSelectedProvinceId(availableResults[0].provinceId);
+      }
+    }
+  }, [availableResults, selectedProvinceId]);
+
   if (!isOpen) return null;
 
   const handleCheck = (e: React.FormEvent) => {
     e.preventDefault();
-    const targetResult = availableResults.find((p) => p.provinceId === selectedProvinceId) || availableResults[0];
+    const targetResult =
+      availableResults.find((p) => p.provinceId === selectedProvinceId) || availableResults[0];
     if (!targetResult) return;
 
     const res = checkTicket(ticketNumber, targetResult);
@@ -89,7 +100,7 @@ export function TicketCheckerModal({
               inputMode="numeric"
               maxLength={6}
               value={ticketNumber}
-              onChange={(e) => setTicketNumber(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setTicketNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="Ví dụ: 829103"
               className="w-full text-center font-mono text-2xl sm:text-3xl font-black tracking-widest rounded-xl border bg-background px-4 py-3 text-red-600 placeholder:text-muted-foreground/30 focus:ring-2 focus:ring-red-500"
             />
@@ -104,37 +115,37 @@ export function TicketCheckerModal({
           </button>
         </form>
 
-        {/* Result Display */}
+        {/* Result Display - Giống message Dò vé số Online */}
         {checkResult && (
           <div
             className={`mt-5 rounded-2xl p-4 border transition-all animate-in zoom-in-95 ${
               checkResult.isWinner
-                ? 'bg-amber-500/10 border-amber-500/40 text-amber-950 dark:text-amber-200'
-                : 'bg-muted/30 border-border text-foreground'
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                : 'border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200'
             }`}
           >
-            <div className="flex items-start gap-3">
-              {checkResult.isWinner ? (
-                <CheckCircle2 className="size-6 text-amber-600 shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="size-6 text-muted-foreground shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1">
-                {checkResult.isWinner ? (
-                  <>
-                    <div className="flex items-center gap-1.5 font-black text-amber-700 dark:text-amber-400 text-lg">
-                      <Sparkles className="size-5" /> {checkResult.prizeName}
-                    </div>
-                    <div className="text-xl font-mono font-black text-red-600 dark:text-red-400 mt-0.5">
-                      Trị giá: {checkResult.rewardAmount}
-                    </div>
-                    <p className="mt-1 text-xs opacity-90">{checkResult.details}</p>
-                  </>
-                ) : (
-                  <p className="text-sm font-semibold">{checkResult.details}</p>
+            {checkResult.isWinner ? (
+              <div className="space-y-1 text-center">
+                <div className="flex items-center justify-center gap-1.5 font-bold text-sm">
+                  <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
+                  <span>
+                    {checkResult.prizeName === 'Giải Phụ Đặc Biệt'
+                      ? 'Trúng giải phụ Đặc Biệt.'
+                      : checkResult.details}
+                  </span>
+                </div>
+                {checkResult.rewardAmount && (
+                  <div className="text-center text-xl font-mono font-black text-red-600 dark:text-red-400">
+                    Trị giá {checkResult.rewardAmount.replace(/\s+đ$/, 'đ')}
+                  </div>
                 )}
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="size-5 text-amber-600 shrink-0" />
+                <p className="text-sm font-semibold">{checkResult.details}</p>
+              </div>
+            )}
           </div>
         )}
       </div>

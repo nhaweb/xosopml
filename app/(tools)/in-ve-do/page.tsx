@@ -74,7 +74,7 @@ export default function InVeDoPage() {
   return (
     <SiteFrame>
       {/* Controls Bar - Hidden on print */}
-      <div className="no-print mb-6 rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
+      <div className="no-print print:hidden mb-6 rounded-2xl border bg-card p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
@@ -153,7 +153,7 @@ export default function InVeDoPage() {
         </div>
       </div>
 
-      <div className="no-print">
+      <div className="no-print print:hidden">
         <ApiDataSourceBanner
           source={apiMeta.source}
           warning={apiMeta.warning}
@@ -199,6 +199,8 @@ export default function InVeDoPage() {
             <tbody className="divide-y border-black">
               {currentProvinces[0]?.prizes.map((prizeTpl, pIdx) => {
                 const isSpecial = prizeTpl.prizeName.includes('Đặc Biệt') || prizeTpl.prizeName.includes('G.ĐB');
+                const isEighth = prizeTpl.prizeName.includes('G.Tám');
+                const isFourth = prizeTpl.prizeName.includes('G.Tư');
                 return (
                   <tr key={prizeTpl.prizeName} className={isSpecial ? 'font-black bg-gray-50' : ''}>
                     <th scope="row" className="border-r-2 border-black p-2 text-xs font-bold bg-gray-100">
@@ -213,14 +215,22 @@ export default function InVeDoPage() {
                       const rowNumbers = prov.prizes[pIdx]?.numbers || [];
                       return (
                         <td key={prov.provinceCode} className="border-r last:border-r-0 border-black p-2 font-mono tabular-nums">
-                          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
+                          <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5">
                             {rowNumbers.map((num, nIdx) => (
                               <span
                                 key={nIdx}
-                                className={isSpecial ? 'text-lg font-black tracking-widest' : 'font-bold text-sm tracking-wider'}
+                                className={
+                                  isSpecial
+                                    ? 'text-lg font-black tracking-widest'
+                                    : isEighth
+                                      ? 'text-base font-black tracking-wider'
+                                      : 'font-bold text-sm tracking-wider'
+                                }
                               >
                                 {num}
-                                {nIdx < rowNumbers.length - 1 && <span className="text-gray-400 mx-1">·</span>}
+                                {!isFourth && nIdx < rowNumbers.length - 1 && (
+                                  <span className="text-gray-400 mx-1">·</span>
+                                )}
                               </span>
                             ))}
                           </div>
@@ -237,7 +247,7 @@ export default function InVeDoPage() {
         {/* Print Footer */}
         <div className="mt-4 border-t-2 border-black pt-2 flex items-center justify-between text-[11px] text-gray-700">
           <span>Đại lý vé số Minh Luân kính chúc quý khách vạn sự may mắn!</span>
-          <span>Dò lại vé tại: https://xosominhluan.vn</span>
+          <span className="font-bold">Đổi số trúng Đặc Biệt: 0789780167</span>
         </div>
       </div>
       )}

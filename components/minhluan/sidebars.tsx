@@ -35,18 +35,13 @@ interface LeftSidebarProps {
 
 const WEEKDAYS_VN = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
 
+function getVietnamNow(d: Date = new Date()): Date {
+  // Việt Nam luôn ở múi giờ UTC+7 (không có DST)
+  return new Date(d.getTime() + 7 * 60 * 60 * 1000);
+}
+
 function getVietnamHour(d: Date): number {
-  try {
-    const vnHourStr = d.toLocaleString('en-US', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-      hour: 'numeric',
-      hour12: false,
-    });
-    const parsed = parseInt(vnHourStr, 10);
-    return Number.isNaN(parsed) ? d.getHours() : parsed % 24;
-  } catch {
-    return d.getHours();
-  }
+  return getVietnamNow(d).getUTCHours();
 }
 
 export function LeftSidebar({
@@ -130,7 +125,18 @@ export function LeftSidebar({
     }
   };
 
-  const today = new Date();
+  const vnToday = getVietnamNow(now);
+  const today = new Date(vnToday.getUTCFullYear(), vnToday.getUTCMonth(), vnToday.getUTCDate());
+  const todayStart = today.getTime();
+  const isAtCurrentOrFutureMonth =
+    calYear > today.getFullYear() ||
+    (calYear === today.getFullYear() && calMonth >= today.getMonth());
+  const activeDayStart = new Date(
+    activeDate.getFullYear(),
+    activeDate.getMonth(),
+    activeDate.getDate()
+  ).getTime();
+  const isAtOrAfterToday = activeDayStart >= todayStart;
   const isSameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -212,16 +218,20 @@ export function LeftSidebar({
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              onClick={() => shiftMonth(1)}
-              className="rounded p-0.5 hover:bg-muted"
+              disabled={isAtCurrentOrFutureMonth}
+              aria-disabled={isAtCurrentOrFutureMonth}
+              onClick={() => !isAtCurrentOrFutureMonth && shiftMonth(1)}
+              className={`rounded p-0.5 ${isAtCurrentOrFutureMonth ? 'opacity-40 pointer-events-none cursor-not-allowed' : 'hover:bg-muted'}`}
               aria-label="Tháng sau"
             >
               <ChevronRight className="size-3.5" />
             </button>
             <button
               type="button"
-              onClick={() => shiftMonth(12)}
-              className="rounded p-0.5 hover:bg-muted"
+              disabled={isAtCurrentOrFutureMonth}
+              aria-disabled={isAtCurrentOrFutureMonth}
+              onClick={() => !isAtCurrentOrFutureMonth && shiftMonth(12)}
+              className={`rounded p-0.5 ${isAtCurrentOrFutureMonth ? 'opacity-40 pointer-events-none cursor-not-allowed' : 'hover:bg-muted'}`}
               aria-label="Năm sau"
             >
               <ChevronsRight className="size-3.5" />
@@ -242,21 +252,32 @@ export function LeftSidebar({
               const selected = isSameDay(cell.date, activeDate);
               const isToday = isSameDay(cell.date, today);
               const isWeekend = cell.date.getDay() === 0 || cell.date.getDay() === 6;
+              const cellDayStart = new Date(
+                cell.date.getFullYear(),
+                cell.date.getMonth(),
+                cell.date.getDate()
+              ).getTime();
+              const isFuture = cellDayStart > todayStart;
               return (
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => onSelectDate(cell.date)}
-                  className={`rounded py-1 font-mono transition-colors ${selected
-                    ? 'bg-red-600 font-black text-white shadow-2xs'
-                    : isToday
-                      ? 'bg-blue-600/15 font-black text-blue-700 dark:text-blue-400 ring-1 ring-blue-500'
-                      : !cell.inMonth
-                        ? 'text-muted-foreground/40 hover:bg-muted/40'
-                        : isWeekend
-                          ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40'
-                          : 'text-foreground hover:bg-muted'
-                    }`}
+                  disabled={isFuture}
+                  aria-disabled={isFuture}
+                  onClick={() => !isFuture && onSelectDate(cell.date)}
+                  className={`rounded py-1 font-mono transition-colors ${
+                    isFuture
+                      ? 'opacity-40 pointer-events-none cursor-not-allowed text-muted-foreground/50'
+                      : selected
+                        ? 'bg-red-600 font-black text-white shadow-2xs'
+                        : isToday
+                          ? 'bg-blue-600/15 font-black text-blue-700 dark:text-blue-400 ring-1 ring-blue-500'
+                          : !cell.inMonth
+                            ? 'text-muted-foreground/40 hover:bg-muted/40'
+                            : isWeekend
+                              ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40'
+                              : 'text-foreground hover:bg-muted'
+                  }`}
                 >
                   {cell.date.getDate()}
                 </button>
@@ -297,8 +318,12 @@ export function LeftSidebar({
           </div>
           <button
             type="button"
-            onClick={() => shiftActiveDay(1)}
-            className="grid size-5 place-items-center rounded-full border bg-background hover:bg-muted"
+            disabled={isAtOrAfterToday}
+            aria-disabled={isAtOrAfterToday}
+            onClick={() => !isAtOrAfterToday && shiftActiveDay(1)}
+            className={`grid size-5 place-items-center rounded-full border bg-background ${
+              isAtOrAfterToday ? 'opacity-40 pointer-events-none cursor-not-allowed' : 'hover:bg-muted'
+            }`}
             aria-label="Ngày sau"
           >
             <ChevronRight className="size-3" />
@@ -524,8 +549,12 @@ export function RightSidebar() {
         <div className="text-xs font-extrabold uppercase tracking-wide text-amber-300">
           XỔ SỐ MINH LUÂN
         </div>
-        <div className="mt-2 whitespace-nowrap text-[14.5px] sm:text-base lg:text-[14.5px] font-black uppercase leading-tight tracking-tight text-white drop-shadow-xs">
-          ĐỔI SỐ TRÚNG ĐẶC BIỆT
+        <div className="mt-2 text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow-xs">
+          ĐỔI SỐ TRÚNG
+        </div>
+        <div className="mt-1.5 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-amber-300/70 bg-gradient-to-r from-red-600 via-red-500 to-red-600 px-3.5 py-1 text-base font-black uppercase tracking-wide text-white animate-[live-pulse-glow_1.6s_ease-in-out_infinite]">
+          <span className="inline-block size-2 rounded-full bg-amber-300 animate-ping" />
+          <span>ĐẶC BIỆT</span>
         </div>
         <div className="mt-3 rounded-lg border border-amber-400/30 bg-black/30 py-1.5 font-mono text-lg font-extrabold tracking-wide text-amber-300">
           {siteConfig.hotline}
@@ -666,7 +695,7 @@ export function RightSidebar() {
         <div className="mt-0.5 text-sm font-extrabold uppercase tracking-wide text-white">
           TƯỜNG THUẬT
         </div>
-        <div className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-amber-300/70 bg-gradient-to-r from-red-600 via-red-500 to-red-600 px-3.5 py-1 text-lg font-black uppercase tracking-wide text-white animate-[live-pulse-glow_1.6s_ease-in-out_infinite]">
+        <div className="mt-1 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-amber-300/70 bg-gradient-to-r from-red-600 via-red-500 to-red-600 px-3.5 py-1 text-lg font-black uppercase tracking-wide text-white animate-[live-pulse-glow_1.6s_ease-in-out_infinite]">
           <span className="inline-block size-2.5 rounded-full bg-amber-300 animate-ping" />
           <span>TRỰC TIẾP</span>
         </div>
@@ -694,7 +723,7 @@ export function RightSidebar() {
           </span>
         </div>
 
-        <div className="text-xs font-black tracking-wide text-amber-200">
+        <div className="whitespace-nowrap text-[11.5px] sm:text-xs font-black tracking-wide text-amber-200">
           Bắc - Trung - Nam
         </div>
         <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1 text-[11px] font-black text-white shadow group-hover:bg-red-500">
@@ -717,7 +746,7 @@ export function RightSidebar() {
           </li>
           <li>
             <Link href="/so-mo" className="hover:underline">
-              ▸ Sổ mơ lô đề giải mã giấc mơ
+              ▸ Giải mã giấc mơ
             </Link>
           </li>
           <li>

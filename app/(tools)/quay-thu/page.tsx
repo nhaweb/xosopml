@@ -222,15 +222,27 @@ export default function QuayThuPage() {
             <tbody className="divide-y divide-border">
               {displayResult.prizes.map((prize, idx) => {
                 const isSpecial = prize.prizeName.includes('Đặc Biệt');
+                const isHighlightTail =
+                  (!isNorth && prize.prizeName.includes('G.Tám')) ||
+                  (isNorth && prize.prizeName.includes('G.Bảy'));
+                const isRedHighlight = isSpecial || isHighlightTail;
                 return (
                   <tr
                     key={prize.prizeName}
-                    className={isSpecial ? 'bg-red-500/5 font-bold' : idx % 2 === 0 ? 'bg-card' : 'bg-muted/15'}
+                    className={
+                      isSpecial
+                        ? 'bg-red-500/5 font-bold'
+                        : isHighlightTail
+                          ? 'bg-red-500/[0.03] font-bold'
+                          : idx % 2 === 0
+                            ? 'bg-card'
+                            : 'bg-muted/15'
+                    }
                   >
                     <th
                       scope="row"
                       className={`border-r px-3 py-2 text-center text-xs font-bold ${
-                        isSpecial ? 'text-red-600 font-black' : 'text-foreground'
+                        isRedHighlight ? 'text-red-600 dark:text-red-400 font-black' : 'text-foreground'
                       }`}
                     >
                       {prize.prizeName}
@@ -241,8 +253,8 @@ export default function QuayThuPage() {
                           <span
                             key={nIdx}
                             className={`font-mono tabular-nums tracking-widest ${
-                              isSpecial
-                                ? 'text-xl font-black text-red-600'
+                              isRedHighlight
+                                ? 'text-2xl sm:text-3xl font-black text-red-600 dark:text-red-400 leading-tight'
                                 : 'text-base font-bold text-foreground'
                             }`}
                           >

@@ -43,7 +43,7 @@ export default function BangDacBietPage() {
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
             <Table className="size-4" />
-            Thống Kê Giải Đặc Biệt Minh Luân
+            Thống Kê Giải Đặc Biệt
           </div>
           <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl text-foreground">
             Bảng Đặc Biệt Năm {selectedYear}
