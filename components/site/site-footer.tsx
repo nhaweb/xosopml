@@ -39,17 +39,17 @@ export function SiteFooter() {
             </h3>
             <ul className="space-y-2.5 text-xs text-slate-300">
               <li>
-                <Link href="/#xsmb" className="transition-colors hover:text-amber-400">
+                <Link href="/ket-qua-xo-so/mien-bac" className="transition-colors hover:text-amber-400">
                   Xổ số Miền Bắc (XSMB)
                 </Link>
               </li>
               <li>
-                <Link href="/#xsmt" className="transition-colors hover:text-amber-400">
+                <Link href="/ket-qua-xo-so/mien-trung" className="transition-colors hover:text-amber-400">
                   Xổ số Miền Trung (XSMT)
                 </Link>
               </li>
               <li>
-                <Link href="/#xsmn" className="transition-colors hover:text-amber-400">
+                <Link href="/ket-qua-xo-so/mien-nam" className="transition-colors hover:text-amber-400">
                   Xổ số Miền Nam (XSMN)
                 </Link>
               </li>

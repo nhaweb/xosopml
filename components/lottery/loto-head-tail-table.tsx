@@ -24,21 +24,21 @@ export function LotoHeadTailTable({ provinces, highlightDigit }: LotoHeadTailTab
   const digits = Array.from({ length: 10 }, (_, i) => i);
 
   return (
-    <div className="border-t bg-muted/15 p-3">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="border-t bg-muted/15 p-3 sm:p-4">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-primary">
+          <span className="text-sm sm:text-base font-black uppercase tracking-wide text-primary">
             Bảng Lô Tô {viewType === 'head' ? 'Đầu' : 'Đuôi'}
           </span>
-          <span className="text-[11px] text-muted-foreground hidden sm:inline">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
             (Thống kê 2 số cuối)
           </span>
         </div>
-        <div className="flex rounded-md border bg-card p-0.5 text-xs font-semibold">
+        <div className="flex rounded-md border bg-card p-0.5 text-xs font-bold">
           <button
             type="button"
             onClick={() => setViewType('head')}
-            className={`rounded px-2.5 py-0.5 transition-colors ${
+            className={`rounded px-3 py-1 transition-colors ${
               viewType === 'head' ? 'bg-primary text-primary-foreground shadow-xs' : 'hover:bg-muted'
             }`}
           >
@@ -47,7 +47,7 @@ export function LotoHeadTailTable({ provinces, highlightDigit }: LotoHeadTailTab
           <button
             type="button"
             onClick={() => setViewType('tail')}
-            className={`rounded px-2.5 py-0.5 transition-colors ${
+            className={`rounded px-3 py-1 transition-colors ${
               viewType === 'tail' ? 'bg-primary text-primary-foreground shadow-xs' : 'hover:bg-muted'
             }`}
           >
@@ -57,15 +57,27 @@ export function LotoHeadTailTable({ provinces, highlightDigit }: LotoHeadTailTab
       </div>
 
       <div className="overflow-x-auto rounded-lg border bg-card">
-        <table className="w-full min-w-[500px] border-collapse text-xs">
+        <table
+          className={`w-full border-collapse text-sm ${
+            lotoData.length >= 4
+              ? 'min-w-[660px] table-fixed'
+              : lotoData.length === 3
+              ? 'min-w-[560px] table-fixed'
+              : lotoData.length === 2
+              ? 'min-w-[440px] table-fixed'
+              : 'min-w-[360px]'
+          }`}
+        >
           <thead>
             <tr className="bg-muted/60 text-muted-foreground border-b font-bold">
-              <th className="w-16 border-r px-2 py-2 text-center text-foreground font-black">
+              <th className="w-[78px] sm:w-[90px] border-r px-2 py-2.5 text-center text-xs sm:text-sm uppercase text-foreground font-black">
                 {viewType === 'head' ? 'Đầu' : 'Đuôi'}
               </th>
               {lotoData.map((d) => (
-                <th key={d.provinceCode} className="border-r last:border-r-0 px-3 py-2 text-center">
-                  <span className="block font-bold text-foreground">{d.provinceName}</span>
+                <th key={d.provinceCode} className="border-r last:border-r-0 px-2.5 py-2.5 text-center">
+                  <span className="block text-sm sm:text-base font-black text-foreground">
+                    {d.provinceName}
+                  </span>
                 </th>
               ))}
             </tr>
@@ -77,12 +89,12 @@ export function LotoHeadTailTable({ provinces, highlightDigit }: LotoHeadTailTab
                 <tr
                   key={digit}
                   className={`transition-colors ${
-                    isHighlighted ? 'bg-amber-100/60 dark:bg-amber-950/30' : 'hover:bg-muted/30'
+                    isHighlighted ? 'bg-amber-100/60 dark:bg-amber-950/30' : ''
                   }`}
                 >
                   <th
                     scope="row"
-                    className={`border-r px-2 py-1.5 text-center font-bold text-sm font-mono ${
+                    className={`border-r px-2 py-2 text-center font-black text-base sm:text-lg font-mono tabular-nums ${
                       isHighlighted
                         ? 'bg-amber-300 dark:bg-amber-500 text-black font-black'
                         : 'bg-muted/40 text-primary'
@@ -97,10 +109,10 @@ export function LotoHeadTailTable({ provinces, highlightDigit }: LotoHeadTailTab
                     return (
                       <td
                         key={d.provinceCode}
-                        className="border-r last:border-r-0 px-3 py-1.5 font-mono text-center tracking-widest text-[13px]"
+                        className="border-r last:border-r-0 px-2.5 py-2 font-mono tabular-nums text-center tracking-wider text-[15px] sm:text-[17px] md:text-[18px]"
                       >
                         {values && values.length > 0 ? (
-                          <span className="font-semibold text-foreground">
+                          <span className="font-extrabold text-foreground">
                             {values.map((v, i) => {
                               const fullPair =
                                 viewType === 'head' ? `${digit}${v}` : `${v}${digit}`;
@@ -110,15 +122,17 @@ export function LotoHeadTailTable({ provinces, highlightDigit }: LotoHeadTailTab
                               return (
                                 <React.Fragment key={i}>
                                   <span
-                                    className={
+                                    className={`inline-block rounded px-1 transition-colors hover:bg-amber-200/85 dark:hover:bg-amber-500/30 ${
                                       hitHighlight
-                                        ? 'bg-amber-300 dark:bg-amber-400 text-black px-1 rounded font-bold'
+                                        ? 'bg-amber-300 dark:bg-amber-400 text-black font-black'
                                         : ''
-                                    }
+                                    }`}
                                   >
                                     {v}
                                   </span>
-                                  {i < values.length - 1 && ', '}
+                                  {i < values.length - 1 && (
+                                    <span className="text-muted-foreground/70 font-normal">, </span>
+                                  )}
                                 </React.Fragment>
                               );
                             })}

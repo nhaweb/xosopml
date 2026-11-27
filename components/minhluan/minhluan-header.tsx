@@ -33,7 +33,7 @@ interface MinhLuanHeaderProps {
 
 const mainNavLinks = [
   { label: 'MINH LUÂN', href: '/' },
-  { label: 'TRỰC TIẾP', href: '/#kqxs-hom-nay' },
+  { label: 'TRỰC TIẾP', href: '/truc-tiep' },
   { label: 'SỔ KẾT QUẢ', href: '/thong-ke/giai-dac-biet' },
   { label: 'SỚ ĐẦU ĐUÔI', href: '/so-dau-duoi' },
   { label: 'THỐNG KÊ', href: '/thong-ke/tan-suat' },
@@ -305,21 +305,23 @@ export function MinhLuanHeader({
               </div>
             </Link>
 
-            {/* Menu 5 nút ở dưới canh giữa */}
+            {/* Menu 5 nút ở dưới canh giữa — luôn điều hướng thẳng sang /ket-qua-xo-so/ theo vùng miền */}
             <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1">
               {[
-                { id: 'all', label: 'Home' },
-                { id: 'south', label: 'Miền Nam' },
-                { id: 'central', label: 'Miền Trung' },
-                { id: 'north', label: 'Miền Bắc' },
-                { id: 'vietlott', label: 'Vietlott' },
+                { id: 'all', label: 'Home', href: '/' },
+                { id: 'south', label: 'Miền Nam', href: '/ket-qua-xo-so/mien-nam' },
+                { id: 'central', label: 'Miền Trung', href: '/ket-qua-xo-so/mien-trung' },
+                { id: 'north', label: 'Miền Bắc', href: '/ket-qua-xo-so/mien-bac' },
+                { id: 'vietlott', label: 'Vietlott', href: '/ket-qua-xo-so/vietlott' },
               ].map((tab) => {
-                const isActive = activeRegionTab === tab.id;
+                const isActive =
+                  tab.href === '/'
+                    ? pathname === '/'
+                    : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
                 return (
-                  <button
+                  <Link
                     key={tab.id}
-                    type="button"
-                    onClick={() => onSelectRegionTab(tab.id as any)}
+                    href={tab.href}
                     className={`rounded-t-md border px-2.5 py-1 text-xs font-bold transition-colors ${
                       isActive
                         ? 'border-red-600 bg-red-600 text-white shadow-2xs'
@@ -327,7 +329,7 @@ export function MinhLuanHeader({
                     }`}
                   >
                     {tab.label}
-                  </button>
+                  </Link>
                 );
               })}
             </div>

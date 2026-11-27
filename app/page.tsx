@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { Check, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import { getFallbackLotteryResults } from '@/lib/fallback-lottery-data';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
+import { PreDrawScheduleCard } from '@/components/lottery/pre-draw-schedule-card';
 import { AiLotoSummaryWidget } from '@/components/lottery/ai-loto-summary-widget';
+import { getRegionDrawStatus, isAnyRegionLiveOrUpcoming } from '@/lib/draw-schedule-status';
 import { WeeklyScheduleMatrix } from '@/components/lottery/weekly-schedule-matrix';
 import { TicketCheckerModal } from '@/components/lottery/ticket-checker-modal';
 import { VietlottKenoWidget } from '@/components/lottery/vietlott-keno-widget';
@@ -67,12 +69,20 @@ export default function Page() {
     return getFallbackLotteryResults(y);
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [clockNow, setClockNow] = useState<Date>(() => new Date());
   const [apiMeta, setApiMeta] = useState<{
     source: 'xosoapi.online' | 'fallback';
     warning?: string;
     isLiveWindow?: boolean;
     revalidateSeconds?: number;
+    resolvedDate?: string;
+    isFallbackToLatestAvailable?: boolean;
   }>({ source: 'xosoapi.online', revalidateSeconds: 3600 });
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockNow(new Date()), 15_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     try {
@@ -102,57 +112,83 @@ export default function Page() {
     }
   }, []);
 
-  const loadDrawsFromServer = useCallback(async (targetDate: Date, yesterdayDate: Date) => {
-    setIsLoading(true);
-    try {
-      const [todayRes, prevRes] = await Promise.all([
-        fetch(`/api/xoso/draws?date=${toIsoDate(targetDate)}`),
-        fetch(`/api/xoso/draws?date=${toIsoDate(yesterdayDate)}`),
-      ]);
+  const loadDrawsFromServer = useCallback(
+    async (targetDate: Date, yesterdayDate: Date, silent = false) => {
+      if (!silent) setIsLoading(true);
+      const fetchOpts: RequestInit = isAnyRegionLiveOrUpcoming()
+        ? { cache: 'no-store' }
+        : {};
+      try {
+        const [todayRes, prevRes] = await Promise.all([
+          fetch(`/api/xoso/draws?date=${toIsoDate(targetDate)}`, fetchOpts),
+          fetch(`/api/xoso/draws?date=${toIsoDate(yesterdayDate)}`),
+        ]);
 
-      if (todayRes.ok) {
-        const todayJson = await todayRes.json();
-        if (todayJson?.data) {
-          setLotteryData(todayJson.data);
+        if (todayRes.ok) {
+          const todayJson = await todayRes.json();
+          if (todayJson?.data) {
+            setLotteryData(todayJson.data);
+            setApiMeta({
+              source: todayJson.source || 'fallback',
+              warning: todayJson.warning,
+              isLiveWindow: todayJson.isLiveWindow,
+              revalidateSeconds: todayJson.revalidateSeconds,
+              resolvedDate: todayJson.resolvedDate,
+              isFallbackToLatestAvailable: Boolean(todayJson.isFallbackToLatestAvailable),
+            });
+          }
+        } else if (!silent) {
+          setLotteryData(getFallbackLotteryResults(targetDate));
+        }
+
+        if (prevRes.ok) {
+          const prevJson = await prevRes.json();
+          if (prevJson?.data) {
+            setPrevLotteryData(prevJson.data);
+          }
+        } else if (!silent) {
+          setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
+        }
+      } catch {
+        if (!silent) {
+          setLotteryData(getFallbackLotteryResults(targetDate));
+          setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
           setApiMeta({
-            source: todayJson.source || 'fallback',
-            warning: todayJson.warning,
-            isLiveWindow: todayJson.isLiveWindow,
-            revalidateSeconds: todayJson.revalidateSeconds,
+            source: 'fallback',
+            warning: 'Không thể kết nối máy chủ API. Đang hiển thị dữ liệu dự phòng.',
           });
         }
-      } else {
-        setLotteryData(getFallbackLotteryResults(targetDate));
-      }
-
-      if (prevRes.ok) {
-        const prevJson = await prevRes.json();
-        if (prevJson?.data) {
-          setPrevLotteryData(prevJson.data);
+      } finally {
+        if (!silent) {
+          setIsLoading(false);
+          if (typeof window !== 'undefined' && window.location.hash === '#vietlott') {
+            setActiveRegionTab('vietlott');
+            setTimeout(() => {
+              document.getElementById('vietlott')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 80);
+          }
         }
-      } else {
-        setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
       }
-    } catch {
-      setLotteryData(getFallbackLotteryResults(targetDate));
-      setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
-      setApiMeta({
-        source: 'fallback',
-        warning: 'Không thể kết nối máy chủ API. Đang hiển thị dữ liệu dự phòng.',
-      });
-    } finally {
-      setIsLoading(false);
-      if (window.location.hash === '#vietlott') {
-        setActiveRegionTab('vietlott');
-        setTimeout(() => {
-          document.getElementById('vietlott')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 80);
-      }
-    }
-  }, []);
+    },
+    []
+  );
 
   useEffect(() => {
-    loadDrawsFromServer(activeDate, prevDate);
+    loadDrawsFromServer(activeDate, prevDate, false);
+  }, [activeDate, prevDate, loadDrawsFromServer]);
+
+  // Polling tự động mỗi 12 giây trong khung giờ cận quay & đang quay trực tiếp (giảm tối đa độ trễ)
+  useEffect(() => {
+    const todayIso = toIsoDate(new Date());
+    const activeIso = toIsoDate(activeDate);
+    if (activeIso !== todayIso) return;
+
+    const interval = setInterval(() => {
+      if (isAnyRegionLiveOrUpcoming(new Date())) {
+        loadDrawsFromServer(activeDate, prevDate, true);
+      }
+    }, 12_000);
+    return () => clearInterval(interval);
   }, [activeDate, prevDate, loadDrawsFromServer]);
 
   const allProvinces = useMemo(
@@ -493,7 +529,9 @@ export default function Page() {
               <div className="mt-2.5 flex items-center justify-center gap-1.5 rounded-md border border-blue-200/70 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
                 <Check className="size-4 text-emerald-600 stroke-[3]" />
                 <span>
-                  Xổ Số {isToday ? 'hôm nay' : `ngày ${lotteryData.formattedDate}`} đã cập nhật »{' '}
+                  {apiMeta.isFallbackToLatestAvailable
+                    ? `Chưa tới giờ mở thưởng hôm nay — đang hiển thị kết quả kỳ gần nhất (${lotteryData.formattedDate}) » `
+                    : `Xổ Số ${isToday ? 'hôm nay' : `ngày ${lotteryData.formattedDate}`} đã cập nhật » `}
                   <Link href={`/ngay/${dateSlug}`} className="underline hover:text-red-600">
                     Xem thêm trang kết quả xổ số theo ngày!...
                   </Link>
@@ -530,29 +568,44 @@ export default function Page() {
               </div>
             )}
 
-            {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (3 MIỀN) HOẶC SKELETON LOADING */}
+            {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (3 MIỀN) HOẶC CẬN GIỜ QUAY / SKELETON LOADING */}
             {activeRegionTab !== 'vietlott' && (
               isLoading ? (
                 <LotteryBoardSkeleton count={3} />
               ) : (
                 <div className="flex flex-col gap-6">
-                  {orderedRegions.map((board) => (
-                    <RegionLotteryBoard
-                      key={board.id}
-                      id={board.id}
-                      title={board.title}
-                      regionCode={board.regionCode}
-                      drawTime={board.drawTime}
-                      dateStr={lotteryData.formattedDate}
-                      results={board.results}
-                    />
-                  ))}
+                  {orderedRegions.map((board) => {
+                    const phase = getRegionDrawStatus(board.key, activeDate, clockNow);
+                    // Cận giờ mở thưởng (trước giờ quay 5-10 phút): hiển thị lịch mở thưởng + spinner xoay
+                    if (phase === 'upcoming') {
+                      return (
+                        <PreDrawScheduleCard
+                          key={board.id}
+                          id={board.id}
+                          region={board.key}
+                          date={activeDate}
+                          formattedDate={activeDateFormatted}
+                        />
+                      );
+                    }
+                    return (
+                      <RegionLotteryBoard
+                        key={board.id}
+                        id={board.id}
+                        title={board.title}
+                        regionCode={board.regionCode}
+                        drawTime={board.drawTime}
+                        dateStr={lotteryData.formattedDate}
+                        results={board.results}
+                      />
+                    );
+                  })}
                 </div>
               )
             )}
 
-            {/* KHỐI HIỂN THỊ KẾT QUẢ XỔ SỐ NGÀY TRƯỚC ĐÓ (HÔM QUA) */}
-            {activeRegionTab !== 'vietlott' && (
+            {/* KHỐI HIỂN THỊ KẾT QUẢ XỔ SỐ NGÀY TRƯỚC ĐÓ (HÔM QUA) — chỉ hiển thị khi ở tab Home (all) */}
+            {activeRegionTab === 'all' && (
               <section className="mt-8 overflow-hidden rounded-xl border-2 border-amber-500/40 bg-card shadow-sm">
                 <button
                   type="button"
@@ -620,27 +673,30 @@ export default function Page() {
               </section>
             )}
 
-            {/* #5: Bảng Thống Kê 3 Cột */}
-            <div className="mt-8">
-              <Stats3ColTable lotteryData={lotteryData} />
-            </div>
+            {/* Chỉ hiển thị các khối thống kê/Vietlott/Lịch tuần khi ở tab Home */}
+            {activeRegionTab === 'all' && (
+              <>
+                {/* #5: Bảng Thống Kê 3 Cột */}
+                <div className="mt-8">
+                  <Stats3ColTable lotteryData={lotteryData} />
+                </div>
 
-            {/* AI Loto Intelligence Hub */}
-            <div className="mt-6">
-              <AiLotoSummaryWidget />
-            </div>
+                {/* AI Loto Intelligence Hub */}
+                <div className="mt-6">
+                  <AiLotoSummaryWidget />
+                </div>
 
-            {/* Khối Điện toán Vietlott & Keno */}
-            {activeRegionTab !== 'vietlott' && (
-              <div id="vietlott" className="mt-6">
-                <VietlottKenoWidget />
-              </div>
+                {/* Khối Điện toán Vietlott & Keno */}
+                <div id="vietlott" className="mt-6">
+                  <VietlottKenoWidget />
+                </div>
+
+                {/* Lịch Mở Thưởng 3 Miền Trong Tuần */}
+                <div id="lich-mo-thuong" className="mt-6">
+                  <WeeklyScheduleMatrix />
+                </div>
+              </>
             )}
-
-            {/* Lịch Mở Thưởng 3 Miền Trong Tuần */}
-            <div id="lich-mo-thuong" className="mt-6">
-              <WeeklyScheduleMatrix />
-            </div>
           </div>
 
           {/* CỘT PHẢI */}

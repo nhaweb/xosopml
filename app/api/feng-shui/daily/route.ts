@@ -31,8 +31,9 @@ function getNextDateIso(isoDate: string): string {
   return `${ny}-${nm}-${nd}`;
 }
 
-async function extractYesterdayXsmbSpecialLast2(todayIso: string): Promise<string> {
+async function extractLatestXsmbSpecialLast2(todayIso: string): Promise<string> {
   const [y, m, day] = todayIso.split('-').map(Number);
+  // Lấy 2 số đuôi Giải Đặc Biệt XSMB kỳ gần nhất (hôm qua)
   const yesterday = new Date(y, m - 1, day - 1, 12, 0, 0);
   const env = await fetchLotteryResultsByDate(yesterday);
   const northDraw = env.data.north?.[0];
@@ -40,7 +41,14 @@ async function extractYesterdayXsmbSpecialLast2(todayIso: string): Promise<strin
     (p) => p.prizeName.includes('Đặc Biệt') || p.prizeName.includes('G.ĐB')
   );
   const digits = (sp?.numbers[0] || '').replace(/\D/g, '');
-  return digits.length >= 2 ? digits.slice(-2) : '16';
+  return digits.length >= 2 ? digits.slice(-2) : '02';
+}
+
+function buildLuckyPairs(autoPair: string, manualPair: string | null): string[] {
+  if (manualPair && manualPair.length === 2 && manualPair !== autoPair) {
+    return [autoPair, manualPair];
+  }
+  return [autoPair];
 }
 
 export async function GET() {
@@ -48,6 +56,11 @@ export async function GET() {
     const vn = getVietnamDateParts();
     const todayIso = vn.isoDate;
     const nextUpdateIso = getNextDateIso(todayIso);
+    const minutesOfDay = vn.hour * 60 + vn.minute;
+    const isDisplayWindow = minutesOfDay >= 1 && minutesOfDay <= 15 * 60;
+
+    // Luôn tự động lấy 2 số đuôi Giải Đặc Biệt XSMB
+    const autoLuckyPair = await extractLatestXsmbSpecialLast2(todayIso);
 
     const [existing] = await db
       .select()
@@ -55,40 +68,44 @@ export async function GET() {
       .where(eq(schema.fengShuiDaily.targetDate, todayIso))
       .limit(1);
 
-    if (existing) {
-      return NextResponse.json({
-        targetDate: existing.targetDate,
-        luckyPair: existing.luckyPair,
-        isManualOverride: existing.isManualOverride,
-        nextUpdateDate: nextUpdateIso,
-        canManualOverrideNow: vn.hour >= 0 && vn.hour < 15,
-      });
+    // Nếu Admin có thêm số thủ công (isManualOverride = true), hiển thị song song (append)
+    const manualLuckyPair = existing?.isManualOverride ? existing.luckyPair : null;
+    const luckyPairs = buildLuckyPairs(autoLuckyPair, manualLuckyPair);
+
+    if (!existing) {
+      await db
+        .insert(schema.fengShuiDaily)
+        .values({
+          targetDate: todayIso,
+          luckyPair: autoLuckyPair,
+          isManualOverride: false,
+        })
+        .onConflictDoNothing();
     }
 
-    const luckyPair = await extractYesterdayXsmbSpecialLast2(todayIso);
-    const [inserted] = await db
-      .insert(schema.fengShuiDaily)
-      .values({
-        targetDate: todayIso,
-        luckyPair,
-        isManualOverride: false,
-      })
-      .onConflictDoNothing()
-      .returning();
-
     return NextResponse.json({
-      targetDate: inserted?.targetDate || todayIso,
-      luckyPair: inserted?.luckyPair || luckyPair,
-      isManualOverride: false,
+      targetDate: todayIso,
+      autoLuckyPair,
+      manualLuckyPair,
+      luckyPairs,
+      luckyPair: luckyPairs.join(', '),
+      isManualAppended: Boolean(manualLuckyPair),
+      isManualOverride: Boolean(manualLuckyPair),
+      isDisplayWindow,
       nextUpdateDate: nextUpdateIso,
-      canManualOverrideNow: vn.hour >= 0 && vn.hour < 15,
+      canManualOverrideNow: isDisplayWindow,
     });
   } catch (err) {
     console.error('[GET /api/feng-shui/daily]', err);
     return NextResponse.json({
       targetDate: new Date().toISOString().slice(0, 10),
-      luckyPair: '16',
+      autoLuckyPair: '02',
+      manualLuckyPair: null,
+      luckyPairs: ['02'],
+      luckyPair: '02',
+      isManualAppended: false,
       isManualOverride: false,
+      isDisplayWindow: true,
       nextUpdateDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
       canManualOverrideNow: true,
     });
@@ -104,17 +121,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Chỉ được phép cài đặt/ghi đè thủ công trong khung giờ từ 00:01 đến 15:00 (3h chiều) hàng ngày.',
+            'Chỉ được phép thêm bổ sung số thủ công trong khung giờ từ 00:01 đến 15:00 hàng ngày.',
         },
         { status: 403 }
       );
     }
 
     const body = await request.json();
-    const luckyPair = String(body.luckyPair || '').replace(/\D/g, '').slice(-2);
-    if (luckyPair.length !== 2) {
+    const manualPair = String(body.luckyPair || '').replace(/\D/g, '').slice(-2);
+    if (manualPair.length !== 2) {
       return NextResponse.json({ error: 'Vui lòng nhập đúng 2 chữ số (00-99).' }, { status: 400 });
     }
+
+    const autoLuckyPair = await extractLatestXsmbSpecialLast2(vn.isoDate);
 
     const [existing] = await db
       .select()
@@ -123,30 +142,74 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existing) {
-      const [updated] = await db
+      await db
         .update(schema.fengShuiDaily)
         .set({
-          luckyPair,
+          luckyPair: manualPair,
           isManualOverride: true,
           updatedAt: new Date(),
         })
-        .where(eq(schema.fengShuiDaily.id, existing.id))
-        .returning();
-      return NextResponse.json({ success: true, data: updated });
+        .where(eq(schema.fengShuiDaily.id, existing.id));
+    } else {
+      await db.insert(schema.fengShuiDaily).values({
+        targetDate: vn.isoDate,
+        luckyPair: manualPair,
+        isManualOverride: true,
+      });
     }
 
-    const [created] = await db
-      .insert(schema.fengShuiDaily)
-      .values({
-        targetDate: vn.isoDate,
-        luckyPair,
-        isManualOverride: true,
-      })
-      .returning();
+    const luckyPairs = buildLuckyPairs(autoLuckyPair, manualPair);
 
-    return NextResponse.json({ success: true, data: created });
+    return NextResponse.json({
+      success: true,
+      data: {
+        targetDate: vn.isoDate,
+        autoLuckyPair,
+        manualLuckyPair: manualPair,
+        luckyPairs,
+        luckyPair: luckyPairs.join(', '),
+      },
+    });
   } catch (err) {
     console.error('[POST /api/feng-shui/daily]', err);
-    return NextResponse.json({ error: 'Không thể cập nhật số phong thủy.' }, { status: 500 });
+    return NextResponse.json({ error: 'Không thể thêm bổ sung số phong thủy.' }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  try {
+    const vn = getVietnamDateParts();
+    const autoLuckyPair = await extractLatestXsmbSpecialLast2(vn.isoDate);
+
+    const [existing] = await db
+      .select()
+      .from(schema.fengShuiDaily)
+      .where(eq(schema.fengShuiDaily.targetDate, vn.isoDate))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(schema.fengShuiDaily)
+        .set({
+          luckyPair: autoLuckyPair,
+          isManualOverride: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.fengShuiDaily.id, existing.id));
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        targetDate: vn.isoDate,
+        autoLuckyPair,
+        manualLuckyPair: null,
+        luckyPairs: [autoLuckyPair],
+        luckyPair: autoLuckyPair,
+      },
+    });
+  } catch (err) {
+    console.error('[DELETE /api/feng-shui/daily]', err);
+    return NextResponse.json({ error: 'Không thể xóa số bổ sung.' }, { status: 500 });
   }
 }

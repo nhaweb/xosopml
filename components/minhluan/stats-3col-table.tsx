@@ -133,7 +133,9 @@ export function Stats3ColTable({ lotteryData }: Stats3ColTableProps) {
                   <Link
                     href={
                       row.provinceId && row.regionSlug
-                        ? `/ket-qua-xo-so/${row.regionSlug}/${row.provinceId}.html`
+                        ? `/ket-qua-xo-so/${row.regionSlug}/${row.provinceId}`
+                        : row.regionSlug
+                        ? `/ket-qua-xo-so/${row.regionSlug}`
                         : '/so-dau-duoi'
                     }
                     className={`${

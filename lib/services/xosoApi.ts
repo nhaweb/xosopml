@@ -118,13 +118,17 @@ export interface XoSoServiceEnvelope<T> {
   revalidateSeconds: number;
   warning?: string;
   fetchedAt: string;
+  /** Ngày thực tế của dữ liệu (ví dụ ngày 26 khi ngày 27 chưa đến giờ quay) */
+  resolvedDate?: string;
+  /** Cờ báo hiệu đang tự động hiển thị kết quả ngày gần nhất đã có dữ liệu */
+  isFallbackToLatestAvailable?: boolean;
 }
 
 // ============================================================================
-// 2. CẤU HÌNH CACHING THÔNG MINH THEO KHUNG GIỜ QUAY THƯỞNG (16h10 - 18h40)
+// 2. CẤU HÌNH CACHING THÔNG MINH THEO KHUNG GIỜ QUAY THƯỞNG (16h05 - 18h45)
 // ============================================================================
 
-const LIVE_CACHE_SECONDS = 45;
+const LIVE_CACHE_SECONDS = 10;
 const NORMAL_CACHE_SECONDS = 3600;
 
 interface MemoryCacheEntry<T> {
@@ -138,7 +142,8 @@ export function isWithinLiveDrawWindow(now: Date = new Date()): boolean {
   const utcMs = now.getTime() + now.getTimezoneOffset() * 60_000;
   const vnTime = new Date(utcMs + 7 * 3600_000);
   const totalMinutes = vnTime.getHours() * 60 + vnTime.getMinutes();
-  return totalMinutes >= 970 && totalMinutes <= 1120;
+  // 16:05 (965 phút) -> 18:45 (1125 phút)
+  return totalMinutes >= 965 && totalMinutes <= 1125;
 }
 
 export function getSmartRevalidateSeconds(targetDate?: Date): {
@@ -452,16 +457,17 @@ const SOUTH_CENTRAL_TEMPLATE: Array<{
   prizeName: string;
   prizeOrder: number;
   rewardAmount: string;
+  expectedCount: number;
 }> = [
-  { code: 'G8', prizeName: 'G.Tám', prizeOrder: 1, rewardAmount: '100.000 đ' },
-  { code: 'G7', prizeName: 'G.Bảy', prizeOrder: 2, rewardAmount: '200.000 đ' },
-  { code: 'G6', prizeName: 'G.Sáu', prizeOrder: 3, rewardAmount: '400.000 đ' },
-  { code: 'G5', prizeName: 'G.Năm', prizeOrder: 4, rewardAmount: '1.000.000 đ' },
-  { code: 'G4', prizeName: 'G.Tư', prizeOrder: 5, rewardAmount: '3.000.000 đ' },
-  { code: 'G3', prizeName: 'G.Ba', prizeOrder: 6, rewardAmount: '10.000.000 đ' },
-  { code: 'G2', prizeName: 'G.Nhì', prizeOrder: 7, rewardAmount: '15.000.000 đ' },
-  { code: 'G1', prizeName: 'G.Nhất', prizeOrder: 8, rewardAmount: '30.000.000 đ' },
-  { code: 'DB', prizeName: 'G.Đặc Biệt', prizeOrder: 9, rewardAmount: '2 Tỷ đ' },
+  { code: 'G8', prizeName: 'G.Tám', prizeOrder: 1, rewardAmount: '100.000 đ', expectedCount: 1 },
+  { code: 'G7', prizeName: 'G.Bảy', prizeOrder: 2, rewardAmount: '200.000 đ', expectedCount: 1 },
+  { code: 'G6', prizeName: 'G.Sáu', prizeOrder: 3, rewardAmount: '400.000 đ', expectedCount: 3 },
+  { code: 'G5', prizeName: 'G.Năm', prizeOrder: 4, rewardAmount: '1.000.000 đ', expectedCount: 1 },
+  { code: 'G4', prizeName: 'G.Tư', prizeOrder: 5, rewardAmount: '3.000.000 đ', expectedCount: 7 },
+  { code: 'G3', prizeName: 'G.Ba', prizeOrder: 6, rewardAmount: '10.000.000 đ', expectedCount: 2 },
+  { code: 'G2', prizeName: 'G.Nhì', prizeOrder: 7, rewardAmount: '15.000.000 đ', expectedCount: 1 },
+  { code: 'G1', prizeName: 'G.Nhất', prizeOrder: 8, rewardAmount: '30.000.000 đ', expectedCount: 1 },
+  { code: 'DB', prizeName: 'G.Đặc Biệt', prizeOrder: 9, rewardAmount: '2 Tỷ đ', expectedCount: 1 },
 ];
 
 const NORTH_TEMPLATE: Array<{
@@ -469,15 +475,16 @@ const NORTH_TEMPLATE: Array<{
   prizeName: string;
   prizeOrder: number;
   rewardAmount: string;
+  expectedCount: number;
 }> = [
-  { code: 'DB', prizeName: 'G.Đặc Biệt', prizeOrder: 1, rewardAmount: '1 Tỷ đ' },
-  { code: 'G1', prizeName: 'G.Nhất', prizeOrder: 2, rewardAmount: '10.000.000 đ' },
-  { code: 'G2', prizeName: 'G.Nhì', prizeOrder: 3, rewardAmount: '5.000.000 đ' },
-  { code: 'G3', prizeName: 'G.Ba', prizeOrder: 4, rewardAmount: '1.000.000 đ' },
-  { code: 'G4', prizeName: 'G.Tư', prizeOrder: 5, rewardAmount: '400.000 đ' },
-  { code: 'G5', prizeName: 'G.Năm', prizeOrder: 6, rewardAmount: '200.000 đ' },
-  { code: 'G6', prizeName: 'G.Sáu', prizeOrder: 7, rewardAmount: '100.000 đ' },
-  { code: 'G7', prizeName: 'G.Bảy', prizeOrder: 8, rewardAmount: '40.000 đ' },
+  { code: 'DB', prizeName: 'G.Đặc Biệt', prizeOrder: 1, rewardAmount: '1 Tỷ đ', expectedCount: 1 },
+  { code: 'G1', prizeName: 'G.Nhất', prizeOrder: 2, rewardAmount: '10.000.000 đ', expectedCount: 1 },
+  { code: 'G2', prizeName: 'G.Nhì', prizeOrder: 3, rewardAmount: '5.000.000 đ', expectedCount: 2 },
+  { code: 'G3', prizeName: 'G.Ba', prizeOrder: 4, rewardAmount: '1.000.000 đ', expectedCount: 6 },
+  { code: 'G4', prizeName: 'G.Tư', prizeOrder: 5, rewardAmount: '400.000 đ', expectedCount: 4 },
+  { code: 'G5', prizeName: 'G.Năm', prizeOrder: 6, rewardAmount: '200.000 đ', expectedCount: 6 },
+  { code: 'G6', prizeName: 'G.Sáu', prizeOrder: 7, rewardAmount: '100.000 đ', expectedCount: 3 },
+  { code: 'G7', prizeName: 'G.Bảy', prizeOrder: 8, rewardAmount: '40.000 đ', expectedCount: 4 },
 ];
 
 function normalizePrizeCode(raw: string): string {
@@ -544,12 +551,19 @@ export function mapApiResultsToPrizeRows(
   }
 
   const template = region === 'north' ? NORTH_TEMPLATE : SOUTH_CENTRAL_TEMPLATE;
-  return template.map((tpl) => ({
-    prizeName: tpl.prizeName,
-    prizeOrder: tpl.prizeOrder,
-    rewardAmount: tpl.rewardAmount,
-    numbers: prizeMap.get(tpl.code) || ['...'],
-  }));
+  return template.map((tpl) => {
+    const rawNums = prizeMap.get(tpl.code) || [];
+    const padded = [...rawNums];
+    while (padded.length < tpl.expectedCount) {
+      padded.push('...');
+    }
+    return {
+      prizeName: tpl.prizeName,
+      prizeOrder: tpl.prizeOrder,
+      rewardAmount: tpl.rewardAmount,
+      numbers: padded,
+    };
+  });
 }
 
 export function mapApiDrawToProvinceDrawResult(
@@ -624,6 +638,43 @@ function extractDrawsFromVietnamResponse(
 // 5. PUBLIC SERVICE FUNCTIONS (KẾT QUẢ 3 MIỀN & LỊCH SỬ ĐÀI)
 // ============================================================================
 
+function buildPendingProvinceDraw(province: ProvinceInfo, compactDateKey: string): ProvinceDrawResult {
+  const template = province.region === 'north' ? NORTH_TEMPLATE : SOUTH_CENTRAL_TEMPLATE;
+  return {
+    provinceId: province.id,
+    provinceName: province.name,
+    provinceCode: province.code,
+    drawDate: compactDateKey,
+    prizes: template.map((tpl) => ({
+      prizeName: tpl.prizeName,
+      prizeOrder: tpl.prizeOrder,
+      rewardAmount: tpl.rewardAmount,
+      numbers: Array.from({ length: tpl.expectedCount }, () => '...'),
+    })),
+  };
+}
+
+function ensureScheduledLiveProvinces(
+  draws: ProvinceDrawResult[],
+  region: Region,
+  date: Date,
+  compactDateKey: string
+): ProvinceDrawResult[] {
+  const scheduled = getProvincesByDay(date.getDay(), region);
+  if (scheduled.length === 0) return draws;
+  const byId = new Map(draws.map((d) => [d.provinceId, d]));
+  const merged = scheduled.map(
+    (prov) => byId.get(prov.id) || buildPendingProvinceDraw(prov, compactDateKey)
+  );
+  // Giữ thêm đài ngoài lịch (nếu API trả về)
+  for (const d of draws) {
+    if (!scheduled.some((s) => s.id === d.provinceId)) {
+      merged.push(d);
+    }
+  }
+  return sortProvincesCanonical(merged);
+}
+
 export async function fetchLotteryResultsByDate(
   date: Date = new Date()
 ): Promise<XoSoServiceEnvelope<DayLotteryData>> {
@@ -682,39 +733,65 @@ export async function fetchLotteryResultsByDate(
   }
 
   const todayIso = toIsoDateString(new Date());
-  if (isoDate === todayIso && south.length === 0 && central.length === 0 && north.length === 0) {
+  // Nếu hôm nay thiếu bất kỳ miền nào (VD: Miền Bắc chưa trả về từ v1/draws hoặc vừa quay xong),
+  // tự động gọi bổ sung /api/latest-draws-vn để lấp đầy từng miền còn thiếu!
+  if (isoDate === todayIso && (south.length === 0 || central.length === 0 || north.length === 0)) {
     const latestRes = await requestXoSoApi<XoSoApiLatestDrawsResponse>(
       '/api/latest-draws-vn',
-      revalidateSeconds
+      Math.min(revalidateSeconds, 30)
     );
     if (latestRes.ok && latestRes.data && !latestRes.data.error) {
       const payload = latestRes.data;
-      const mbDraws = (Array.isArray(payload.mienBac)
-        ? payload.mienBac
-        : payload.mienBac
-        ? [payload.mienBac]
-        : []
-      ).filter((d) => (d.date || '').slice(0, 10) === isoDate);
-      const mtDraws = (Array.isArray(payload.mienTrung) ? payload.mienTrung : []).filter(
-        (d) => (d.date || '').slice(0, 10) === isoDate
-      );
-      const mnDraws = (Array.isArray(payload.mienNam) ? payload.mienNam : []).filter(
-        (d) => (d.date || '').slice(0, 10) === isoDate
-      );
-
-      north = mbDraws
-        .map((d) => mapApiDrawToProvinceDrawResult(d, 'north', compactKey))
-        .filter((item): item is ProvinceDrawResult => item !== null);
-      central = mtDraws
-        .map((d) => mapApiDrawToProvinceDrawResult(d, 'central', compactKey))
-        .filter((item): item is ProvinceDrawResult => item !== null);
-      south = mnDraws
-        .map((d) => mapApiDrawToProvinceDrawResult(d, 'south', compactKey))
-        .filter((item): item is ProvinceDrawResult => item !== null);
+      if (north.length === 0) {
+        const mbAll = Array.isArray(payload.mienBac)
+          ? payload.mienBac
+          : payload.mienBac
+          ? [payload.mienBac]
+          : [];
+        const mbToday = mbAll.filter((d) => (d.date || '').slice(0, 10) === isoDate);
+        const mbToUse = mbToday.length > 0 ? mbToday : mbAll;
+        north = mbToUse
+          .map((d) => mapApiDrawToProvinceDrawResult(d, 'north', compactKey))
+          .filter((item): item is ProvinceDrawResult => item !== null);
+      }
+      if (central.length === 0) {
+        const mtAll = Array.isArray(payload.mienTrung) ? payload.mienTrung : [];
+        const mtToday = mtAll.filter((d) => (d.date || '').slice(0, 10) === isoDate);
+        const mtToUse = mtToday.length > 0 ? mtToday : mtAll;
+        central = mtToUse
+          .map((d) => mapApiDrawToProvinceDrawResult(d, 'central', compactKey))
+          .filter((item): item is ProvinceDrawResult => item !== null);
+      }
+      if (south.length === 0) {
+        const mnAll = Array.isArray(payload.mienNam) ? payload.mienNam : [];
+        const mnToday = mnAll.filter((d) => (d.date || '').slice(0, 10) === isoDate);
+        const mnToUse = mnToday.length > 0 ? mnToday : mnAll;
+        south = mnToUse
+          .map((d) => mapApiDrawToProvinceDrawResult(d, 'south', compactKey))
+          .filter((item): item is ProvinceDrawResult => item !== null);
+      }
     }
   }
 
   if (south.length > 0 || central.length > 0 || north.length > 0) {
+    // Trong khung giờ quay trực tiếp của hôm nay, đảm bảo đủ các đài theo lịch
+    // (đài chưa ra giải nào sẽ hiển thị các ô loading/xoay chờ quay)
+    if (isoDate === todayIso && isLiveWindow) {
+      const utcMs = Date.now() + new Date().getTimezoneOffset() * 60_000;
+      const vnNow = new Date(utcMs + 7 * 3600_000);
+      const mins = vnNow.getHours() * 60 + vnNow.getMinutes();
+
+      if (mins >= 16 * 60 + 15 && mins <= 16 * 60 + 45) {
+        south = ensureScheduledLiveProvinces(south, 'south', date, compactKey);
+      }
+      if (mins >= 17 * 60 + 15 && mins <= 17 * 60 + 45) {
+        central = ensureScheduledLiveProvinces(central, 'central', date, compactKey);
+      }
+      if (mins >= 18 * 60 + 15 && mins <= 18 * 60 + 45) {
+        north = ensureScheduledLiveProvinces(north, 'north', date, compactKey);
+      }
+    }
+
     south = sortProvincesCanonical(south);
     central = sortProvincesCanonical(central);
     north = sortProvincesCanonical(north);
@@ -727,19 +804,96 @@ export async function fetchLotteryResultsByDate(
       north,
     };
 
+    const hasAllThreeRegions = south.length > 0 && central.length > 0 && north.length > 0;
+    const effectiveRevalidate = hasAllThreeRegions
+      ? revalidateSeconds
+      : Math.min(revalidateSeconds, 30);
+
     const envelope: XoSoServiceEnvelope<DayLotteryData> = {
       data: resultData,
       source: 'xosoapi.online',
       isLiveWindow,
-      revalidateSeconds,
+      revalidateSeconds: effectiveRevalidate,
       fetchedAt: new Date().toISOString(),
+      resolvedDate: isoDate,
+      isFallbackToLatestAvailable: false,
     };
 
     memoryCache.set(cacheKey, {
-      expiresAt: Date.now() + revalidateSeconds * 1000,
+      expiresAt: Date.now() + effectiveRevalidate * 1000,
       envelope,
     });
     return envelope;
+  }
+
+  // Trường hợp ngày mới (hôm nay) chưa tới giờ quay và chưa có dữ liệu từ API:
+  // Tự động lấy kết quả thực tế của ngày gần nhất đã có dữ liệu (hôm qua) thay vì báo trống/lỗi
+  if (isoDate >= todayIso) {
+    const prevDay = new Date(date);
+    prevDay.setDate(date.getDate() - 1);
+    const prevIso = toIsoDateString(prevDay);
+    const prevCompactKey = toCompactDateKey(prevDay);
+
+    const [prevMn, prevMt, prevMb] = await Promise.all([
+      requestXoSoApi<XoSoApiVietnamDrawsResponse>(
+        `/api/v1/vietnam/draws?date=${prevIso}&region=MN&limit=10`,
+        revalidateSeconds
+      ),
+      requestXoSoApi<XoSoApiVietnamDrawsResponse>(
+        `/api/v1/vietnam/draws?date=${prevIso}&region=MT&limit=10`,
+        revalidateSeconds
+      ),
+      requestXoSoApi<XoSoApiVietnamDrawsResponse>(
+        `/api/v1/vietnam/draws?date=${prevIso}&region=MB&limit=10`,
+        revalidateSeconds
+      ),
+    ]);
+
+    const prevSouth = prevMn.ok
+      ? sortProvincesCanonical(
+          extractDrawsFromVietnamResponse(prevMn.data, prevIso)
+            .map((d) => mapApiDrawToProvinceDrawResult(d, 'south', prevCompactKey))
+            .filter((item): item is ProvinceDrawResult => item !== null)
+        )
+      : [];
+    const prevCentral = prevMt.ok
+      ? sortProvincesCanonical(
+          extractDrawsFromVietnamResponse(prevMt.data, prevIso)
+            .map((d) => mapApiDrawToProvinceDrawResult(d, 'central', prevCompactKey))
+            .filter((item): item is ProvinceDrawResult => item !== null)
+        )
+      : [];
+    const prevNorth = prevMb.ok
+      ? sortProvincesCanonical(
+          extractDrawsFromVietnamResponse(prevMb.data, prevIso)
+            .map((d) => mapApiDrawToProvinceDrawResult(d, 'north', prevCompactKey))
+            .filter((item): item is ProvinceDrawResult => item !== null)
+        )
+      : [];
+
+    if (prevSouth.length > 0 || prevCentral.length > 0 || prevNorth.length > 0) {
+      const latestEnvelope: XoSoServiceEnvelope<DayLotteryData> = {
+        data: {
+          date: prevDay.toISOString(),
+          formattedDate: formatDate(prevDay),
+          south: prevSouth,
+          central: prevCentral,
+          north: prevNorth,
+        },
+        source: 'xosoapi.online',
+        isLiveWindow,
+        revalidateSeconds: Math.min(revalidateSeconds, 60),
+        fetchedAt: new Date().toISOString(),
+        resolvedDate: prevIso,
+        isFallbackToLatestAvailable: true,
+      };
+
+      memoryCache.set(cacheKey, {
+        expiresAt: Date.now() + Math.min(revalidateSeconds, 60) * 1000,
+        envelope: latestEnvelope,
+      });
+      return latestEnvelope;
+    }
   }
 
   if (lastWarning) {

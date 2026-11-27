@@ -70,10 +70,10 @@ export function SiteFrame({ children }: { children: React.ReactNode }) {
 
   const handleSelectRegionTab = (tab: 'all' | 'south' | 'central' | 'north' | 'vietlott') => {
     if (tab === 'all') router.push('/');
-    else if (tab === 'south') router.push('/#xsmn');
-    else if (tab === 'central') router.push('/#xsmt');
-    else if (tab === 'north') router.push('/#xsmb');
-    else router.push('/#vietlott');
+    else if (tab === 'south') router.push('/ket-qua-xo-so/mien-nam');
+    else if (tab === 'central') router.push('/ket-qua-xo-so/mien-trung');
+    else if (tab === 'north') router.push('/ket-qua-xo-so/mien-bac');
+    else router.push('/ket-qua-xo-so/vietlott');
   };
 
   return (

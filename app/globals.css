@@ -172,11 +172,18 @@
   }
 }
 
-/* Cấu hình bản in vé dò chuyên nghiệp cho đại lý */
+/* Cấu hình bản in vé dò chuẩn Minh Ngọc — sắc nét đen thuần #000, không rớt dòng */
 @media print {
   @page {
-    size: A4;
-    margin: 0;
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
 
   header, footer, nav, button, .no-print, [role="navigation"] {
@@ -184,10 +191,10 @@
   }
 
   body {
-    background: white !important;
-    color: black !important;
+    background: #ffffff !important;
+    color: #000000 !important;
     font-size: 11pt !important;
-    padding: 10mm !important;
+    padding: 0 !important;
     margin: 0 !important;
   }
 
@@ -197,21 +204,50 @@
     margin: 0 !important;
   }
 
+  .print-ticket-sheet {
+    border: 1.5px solid #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-black-bar {
+    background: #000000 !important;
+    color: #ffffff !important;
+  }
+
+  .print-sub-bar {
+    background: #222222 !important;
+    color: #ffffff !important;
+  }
+
+  .print-ticket-table,
   table {
     border-collapse: collapse !important;
     width: 100% !important;
-    border: 1.5pt solid black !important;
-    page-break-inside: avoid;
+    border: 1px solid #000000 !important;
+    page-break-inside: avoid !important;
   }
 
-  th, td {
-    border: 1pt solid #333 !important;
-    color: black !important;
-    padding: 3px 6px !important;
+  .print-ticket-table th,
+  .print-ticket-table td,
+  th,
+  td {
+    border: 1px solid #000000 !important;
+    color: #000000 !important;
+    background-color: #ffffff !important;
+    padding: 3px 4px !important;
+  }
+
+  .print-ticket-table span {
+    color: #000000 !important;
+    white-space: nowrap !important;
   }
 
   .text-red-600, .text-red-400 {
-    color: black !important;
+    color: #000000 !important;
     font-weight: 900 !important;
   }
 }

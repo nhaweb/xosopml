@@ -154,7 +154,7 @@ export function RegionLotteryBoard({
         >
           <thead>
             <tr className="border-b bg-blue-50/70 dark:bg-muted/50 text-foreground">
-              <th className="sticky left-0 z-10 w-[78px] sm:w-[90px] bg-muted/95 border-r px-1.5 py-2.5 text-center text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+              <th className="sticky left-0 z-20 w-[78px] sm:w-[90px] bg-[#f2eee7] dark:bg-[#24211f] border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)] px-1.5 py-2.5 text-center text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
                 Giải
               </th>
               {orderedResults.map((prov) => {
@@ -174,7 +174,7 @@ export function RegionLotteryBoard({
                     className="border-r last:border-r-0 px-2 py-2.5 text-center"
                   >
                     <Link
-                      href={`/ket-qua-xo-so/${regionSlug}/${prov.provinceId}.html`}
+                      href={`/ket-qua-xo-so/${regionSlug}/${prov.provinceId}`}
                       className="block text-sm sm:text-base font-black text-blue-800 dark:text-blue-400 hover:text-red-600 hover:underline leading-tight"
                     >
                       {prov.provinceName}
@@ -204,17 +204,17 @@ export function RegionLotteryBoard({
                 ? 'bg-card'
                 : 'bg-muted/20';
               const stickyBg = isSpecial
-                ? 'bg-red-50 dark:bg-[#271515]'
+                ? 'bg-[#fef2f2] dark:bg-[#271515]'
                 : prizeIdx % 2 === 0
                 ? 'bg-card'
-                : 'bg-muted/35 dark:bg-card';
+                : 'bg-[#f6f3ee] dark:bg-[#24211f]';
 
               return (
                 <tr key={prizeTpl.prizeName} className={`transition-colors ${rowBg}`}>
                   {/* Cột tên giải bên trái */}
                   <th
                     scope="row"
-                    className={`sticky left-0 z-10 w-[78px] sm:w-[90px] border-r px-1.5 py-2.5 text-center text-xs font-bold ${stickyBg} ${
+                    className={`sticky left-0 z-20 w-[78px] sm:w-[90px] border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)] px-1.5 py-2.5 text-center text-xs font-bold ${stickyBg} ${
                       isSpecial
                         ? 'text-red-700 dark:text-red-400 font-extrabold'
                         : isEighth || isSeventh
@@ -273,11 +273,11 @@ export function RegionLotteryBoard({
                             return (
                               <div
                                 key={nIdx}
-                                className={
+                                className={`cursor-pointer rounded-md px-1.5 py-0.5 transition-colors hover:bg-amber-200/85 hover:ring-1 hover:ring-amber-400/70 dark:hover:bg-amber-500/30 ${
                                   isLastOddInTwoCol
                                     ? 'col-span-2 flex justify-center'
                                     : 'flex justify-center'
-                                }
+                                }`}
                               >
                                 <PrizeCell
                                   numberStr={num}

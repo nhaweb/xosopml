@@ -41,6 +41,12 @@ const REGION_NAME: Record<Region, string> = {
   north: 'Miền Bắc',
 };
 
+const REGION_SLUG: Record<Region, string> = {
+  south: 'mien-nam',
+  central: 'mien-trung',
+  north: 'mien-bac',
+};
+
 type PageProps = {
   params: Promise<{ region: string; province: string }>;
 };
@@ -82,7 +88,12 @@ export default async function ProvincePage({ params }: PageProps) {
           <Home className="size-3.5" /> Trang chủ
         </Link>
         <ChevronRight className="size-3" />
-        <span className="hover:text-foreground">{REGION_NAME[province.region]}</span>
+        <Link
+          href={`/ket-qua-xo-so/${REGION_SLUG[province.region]}`}
+          className="hover:text-foreground hover:underline"
+        >
+          {REGION_NAME[province.region]}
+        </Link>
         <ChevronRight className="size-3" />
         <span className="font-bold text-red-600 dark:text-red-400">Xổ số {province.name}</span>
       </nav>
@@ -225,7 +236,7 @@ export default async function ProvincePage({ params }: PageProps) {
               {sameDayProvinces.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/${item.region}/${item.id}`}
+                  href={`/ket-qua-xo-so/${REGION_SLUG[item.region]}/${item.id}`}
                   className="rounded-xl border bg-background px-3 py-1 text-xs font-semibold hover:bg-red-600 hover:text-white transition-colors"
                 >
                   Xổ số {item.name}

@@ -19,6 +19,11 @@ import {
 import { DayLotteryData } from '@/types/lottery';
 import { PROVINCES, sortProvincesCanonical } from '@/config/lottery-provinces';
 import { siteConfig } from '@/config/site';
+import {
+  DrawPhaseStatus,
+  getDisplayStatusBadge,
+  getRegionDrawStatus,
+} from '@/lib/draw-schedule-status';
 
 export interface SidebarLookupQuery {
   mode: 'region' | 'province' | 'headtail';
@@ -118,10 +123,9 @@ export function LeftSidebar({
       const p = PROVINCES.find((item) => item.id === lookupProvince);
       const regSlug =
         p?.region === 'south' ? 'mien-nam' : p?.region === 'central' ? 'mien-trung' : 'mien-bac';
-      router.push(`/ket-qua-xo-so/${regSlug}/${lookupProvince}.html`);
+      router.push(`/ket-qua-xo-so/${regSlug}/${lookupProvince}`);
     } else {
-      const target = lookupRegion === 'mien-nam' ? '#xsmn' : lookupRegion === 'mien-trung' ? '#xsmt' : '#xsmb';
-      window.location.hash = target;
+      router.push(`/ket-qua-xo-so/${lookupRegion}`);
     }
   };
 
@@ -142,34 +146,73 @@ export function LeftSidebar({
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate();
 
+  const southStatus = getRegionDrawStatus('south', activeDate, now);
+  const centralStatus = getRegionDrawStatus('central', activeDate, now);
+  const northStatus = getRegionDrawStatus('north', activeDate, now);
+
+  const renderStatusPill = (status: DrawPhaseStatus) => {
+    const badge = getDisplayStatusBadge(status);
+    if (badge.tone === 'live') {
+      return (
+        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white animate-pulse">
+          <span>■</span> {badge.label}
+        </span>
+      );
+    }
+    if (badge.tone === 'done') {
+      return (
+        <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-400">
+          <Check className="size-3 stroke-[3]" /> {badge.label}
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded bg-slate-200/80 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+        <span>●</span> {badge.label}
+      </span>
+    );
+  };
+
+  const renderProvinceStatusIcon = (status: DrawPhaseStatus) => {
+    const badge = getDisplayStatusBadge(status);
+    if (badge.tone === 'live') {
+      return (
+        <span className="shrink-0 text-[10px] font-black text-red-600 animate-pulse" title="Đang sổ">
+          ■
+        </span>
+      );
+    }
+    if (badge.tone === 'done') {
+      return <Check className="size-3.5 shrink-0 text-emerald-600 stroke-[3]" aria-label="Mới" />;
+    }
+    return (
+      <span className="shrink-0 text-[9px] text-slate-400" title="Chờ">
+        ●
+      </span>
+    );
+  };
+
   return (
     <aside className="space-y-3.5 text-xs">
-      {/* #4: Tường Thuật Trực Tiếp Xổ Số */}
+      {/* #4: Tường Thuật Trực Tiếp Xổ Số (đã dời badge trạng thái xuống mục Kết quả xổ số Hôm Nay) */}
       <div className="overflow-hidden rounded-lg border bg-card shadow-2xs">
         <div className="border-b bg-gradient-to-b from-muted/80 to-muted px-3 py-2 text-center font-black text-foreground">
           Tường Thuật Trực Tiếp Xổ Số
         </div>
         <div className="divide-y divide-border/60 p-2 text-[12px]">
           {[
-            { label: 'Trực Tiếp Xổ Số Miền Nam', href: '#xsmn' },
-            { label: 'Trực Tiếp Xổ Số Miền Bắc', href: '#xsmb' },
-            { label: 'Trực Tiếp Xổ Số Miền Trung', href: '#xsmt' },
-            { label: 'Trực Tiếp Xổ Số Vietlott', href: '#vietlott' },
+            { label: 'Trực Tiếp Xổ Số Miền Nam', href: '/truc-tiep?mien=mien-nam' },
+            { label: 'Trực Tiếp Xổ Số Miền Bắc', href: '/truc-tiep?mien=mien-bac' },
+            { label: 'Trực Tiếp Xổ Số Miền Trung', href: '/truc-tiep?mien=mien-trung' },
+            { label: 'Trực Tiếp Xổ Số Vietlott', href: '/#vietlott' },
           ].map((item) => (
-            <a
+            <Link
               key={item.label}
               href={item.href}
-              className="flex items-center justify-between py-1.5 font-semibold text-foreground hover:text-red-600"
+              className="block py-1.5 font-semibold text-foreground hover:text-red-600 transition-colors"
             >
-              <span>▸ {item.label}</span>
-              {isAfter16h ? (
-                <Check className="size-4 shrink-0 text-emerald-600 stroke-[3]" aria-label="Mới - Đã có kết quả" />
-              ) : (
-                <span className="shrink-0 text-[10px] font-bold tracking-tighter text-slate-400" title="Đang chờ mở thưởng">
-                  ● ● ●
-                </span>
-              )}
-            </a>
+              ▸ {item.label}
+            </Link>
           ))}
           <Link
             href="/#lich-mo-thuong"
@@ -183,11 +226,6 @@ export function LeftSidebar({
           >
             ▸ Quay thử cầu may 3 miền
           </Link>
-        </div>
-        <div className="border-t bg-muted/30 px-2.5 py-1.5 text-center text-[10px] text-muted-foreground">
-          <span className="text-slate-400">● ● ●</span> chờ,{' '}
-          <span className="text-red-500">■ ■ ■</span> đang xổ,{' '}
-          <span className="font-bold text-emerald-600">✓</span> mới
         </div>
       </div>
 
@@ -330,63 +368,81 @@ export function LeftSidebar({
           </button>
         </div>
 
-        <div className="space-y-2 p-2 text-[11px]">
+        <div className="space-y-2.5 p-2 text-[11px]">
           <div>
-            <a href="#xsmn" className="font-black text-red-700 dark:text-red-400 hover:underline">
-              ▼ Kết quả xổ số Miền Nam
-            </a>
+            <div className="flex items-center justify-between gap-1">
+              <Link href="/ket-qua-xo-so/mien-nam" className="font-black text-red-700 dark:text-red-400 hover:underline">
+                ▼ Xổ số Miền Nam
+              </Link>
+              {renderStatusPill(southStatus)}
+            </div>
             <ul className="mt-1 space-y-1 pl-2">
               {sortProvincesCanonical(lotteryData.south).map((p) => (
-                <li key={p.provinceId} className="flex items-center justify-between">
+                <li key={p.provinceId} className="flex items-center justify-between gap-1">
                   <Link
-                    href={`/ket-qua-xo-so/mien-nam/${p.provinceId}.html`}
-                    className="hover:text-red-600 hover:underline"
+                    href={`/ket-qua-xo-so/mien-nam/${p.provinceId}`}
+                    className="truncate hover:text-red-600 hover:underline"
                   >
                     ▸ Kết quả xổ số {p.provinceName}
                   </Link>
-                  <Check className="size-3.5 text-emerald-600 stroke-[3]" />
+                  {renderProvinceStatusIcon(southStatus)}
                 </li>
               ))}
             </ul>
           </div>
 
           <div>
-            <a href="#xsmb" className="font-black text-red-700 dark:text-red-400 hover:underline">
-              ▼ Kết quả xổ số Miền Bắc
-            </a>
+            <div className="flex items-center justify-between gap-1">
+              <Link href="/ket-qua-xo-so/mien-bac" className="font-black text-red-700 dark:text-red-400 hover:underline">
+                ▼ Xổ số Miền Bắc
+              </Link>
+              {renderStatusPill(northStatus)}
+            </div>
             <ul className="mt-1 space-y-1 pl-2">
               {lotteryData.north.map((p) => (
-                <li key={p.provinceId} className="flex items-center justify-between">
+                <li key={p.provinceId} className="flex items-center justify-between gap-1">
                   <Link
-                    href={`/ket-qua-xo-so/mien-bac/${p.provinceId}.html`}
-                    className="hover:text-red-600 hover:underline"
+                    href={`/ket-qua-xo-so/mien-bac/${p.provinceId}`}
+                    className="truncate hover:text-red-600 hover:underline"
                   >
                     ▸ Kết quả xổ số {p.provinceName}
                   </Link>
-                  <Check className="size-3.5 text-emerald-600 stroke-[3]" />
+                  {renderProvinceStatusIcon(northStatus)}
                 </li>
               ))}
             </ul>
           </div>
 
           <div>
-            <a href="#xsmt" className="font-black text-red-700 dark:text-red-400 hover:underline">
-              ▼ Kết quả xổ số Miền Trung
-            </a>
+            <div className="flex items-center justify-between gap-1">
+              <Link href="/ket-qua-xo-so/mien-trung" className="font-black text-red-700 dark:text-red-400 hover:underline">
+                ▼ Xổ số Miền Trung
+              </Link>
+              {renderStatusPill(centralStatus)}
+            </div>
             <ul className="mt-1 space-y-1 pl-2">
               {lotteryData.central.map((p) => (
-                <li key={p.provinceId} className="flex items-center justify-between">
+                <li key={p.provinceId} className="flex items-center justify-between gap-1">
                   <Link
-                    href={`/ket-qua-xo-so/mien-trung/${p.provinceId}.html`}
-                    className="hover:text-red-600 hover:underline"
+                    href={`/ket-qua-xo-so/mien-trung/${p.provinceId}`}
+                    className="truncate hover:text-red-600 hover:underline"
                   >
                     ▸ Kết quả xổ số {p.provinceName}
                   </Link>
-                  <Check className="size-3.5 text-emerald-600 stroke-[3]" />
+                  {renderProvinceStatusIcon(centralStatus)}
                 </li>
               ))}
             </ul>
           </div>
+        </div>
+
+        {/* Chú thích 3 trạng thái chuẩn: Chờ / Đang sổ / Mới */}
+        <div className="border-t bg-muted/30 px-2 py-1.5 text-center text-[10px] text-muted-foreground">
+          <span className="font-bold text-slate-500">● Chờ</span>
+          {' · '}
+          <span className="font-bold text-red-600">■ Đang sổ</span>
+          {' · '}
+          <span className="font-bold text-emerald-600">✓ Mới</span>
         </div>
       </div>
 

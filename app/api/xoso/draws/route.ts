@@ -54,10 +54,13 @@ export async function GET(request: NextRequest) {
     }
 
     const envelope = await fetchLotteryResultsByDate(targetDate);
+    const cacheHeader = envelope.isLiveWindow
+      ? `public, s-maxage=${envelope.revalidateSeconds}, stale-while-revalidate=5`
+      : `public, s-maxage=${envelope.revalidateSeconds}, stale-while-revalidate=60`;
     return NextResponse.json(envelope, {
       status: 200,
       headers: {
-        'Cache-Control': `public, s-maxage=${envelope.revalidateSeconds}, stale-while-revalidate=60`,
+        'Cache-Control': cacheHeader,
       },
     });
   } catch (error: unknown) {

@@ -151,11 +151,57 @@ function computeLunarLabel(date = new Date()): string {
   }
 }
 
-function computeElementPairs(elementId: string, birthYearStr: string): [string, string] {
+const CAN_LIST = ['Canh', 'Tân', 'Nhâm', 'Quý', 'Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ'];
+const CHI_LIST = ['Thân', 'Dậu', 'Tuất', 'Hợi', 'Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi'];
+
+const CAN_ORDER = ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý'];
+const CHI_ORDER = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi'];
+
+function foldVietnamese(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
+// Đầy đủ 60 Lục Thập Hoa Giáp (Giáp Tý -> Quý Hợi) kèm năm sinh phổ biến
+const ALL_CAN_CHI_OPTIONS: Array<{ label: string; sampleYear: number; folded: string }> = Array.from(
+  { length: 60 },
+  (_, i) => {
+    const label = `${CAN_ORDER[i % 10]} ${CHI_ORDER[i % 12]}`;
+    // 1984 là Giáp Tý (i = 0); chọn năm sinh nằm gọn trong khoảng 1954 - 2013
+    const rawYear = 1984 + i;
+    const sampleYear = rawYear > 2013 ? rawYear - 60 : rawYear;
+    return {
+      label,
+      sampleYear,
+      folded: foldVietnamese(label),
+    };
+  }
+);
+
+function getCanChiFromYear(yearStr: string): string {
+  const yr = parseInt(yearStr, 10);
+  if (Number.isNaN(yr) || yr < 1900 || yr > 2100) return '';
+  return `${CAN_LIST[yr % 10]} ${CHI_LIST[yr % 12]}`;
+}
+
+function computeElementPairs(
+  elementId: string,
+  birthYearStr: string,
+  canChiStr?: string
+): [string, string] {
   const base = ELEMENT_PAIR_PRESETS[elementId] || ['32', '87'];
   const yr = parseInt(birthYearStr, 10);
   if (Number.isNaN(yr) || yr < 1920) return base;
-  const offset = yr % 10;
+  const canChiHash = (canChiStr || '')
+    .trim()
+    .split('')
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const offset = (yr + canChiHash) % 10;
   if (offset === 0) return base;
   const p1 = String((parseInt(base[0], 10) + offset) % 100).padStart(2, '0');
   const p2 = String((parseInt(base[1], 10) + offset * 3) % 100).padStart(2, '0');
@@ -226,14 +272,29 @@ export default function UserDashboardPage() {
   const [newFavNote, setNewFavNote] = useState('');
 
   // Feng Shui Daily & Lookup
-  const [dailyLuckyPair, setDailyLuckyPair] = useState('16');
+  const [dailyLuckyPair, setDailyLuckyPair] = useState('02');
+  const [dailyLuckyPairs, setDailyLuckyPairs] = useState<string[]>(['02']);
+  const [autoLuckyPair, setAutoLuckyPair] = useState('02');
+  const [manualLuckyPair, setManualLuckyPair] = useState<string | null>(null);
   const [nextUpdateDate, setNextUpdateDate] = useState('');
   const [selectedElementId, setSelectedElementId] = useState('thuy');
-  const [birthYear, setBirthYear] = useState('1992');
+  const [birthYear, setBirthYear] = useState('1983');
+  const [canChiInput, setCanChiInput] = useState('Quý Hợi');
+  const [canChiDropdownOpen, setCanChiDropdownOpen] = useState(false);
+
+  const filteredCanChiOptions = useMemo(() => {
+    const q = foldVietnamese(canChiInput);
+    if (!q) return ALL_CAN_CHI_OPTIONS;
+    return ALL_CAN_CHI_OPTIONS.filter(
+      (opt) => opt.folded.includes(q) || String(opt.sampleYear).includes(q)
+    );
+  }, [canChiInput]);
   const [lookupResult, setLookupResult] = useState<{
     pairs: [string, string];
     lunarDate: string;
     elementName: string;
+    canChi: string;
+    birthYear: string;
   } | null>(null);
 
   // Charts state (3 regions + filtered provinces + 3 charts/tables)
@@ -304,7 +365,15 @@ export default function UserDashboardPage() {
       }
       if (fsRes.ok) {
         const fsJson = await fsRes.json();
-        if (fsJson.luckyPair) setDailyLuckyPair(fsJson.luckyPair);
+        if (Array.isArray(fsJson.luckyPairs) && fsJson.luckyPairs.length > 0) {
+          setDailyLuckyPairs(fsJson.luckyPairs);
+          setDailyLuckyPair(fsJson.luckyPairs.join(', '));
+        } else if (fsJson.luckyPair) {
+          setDailyLuckyPairs([fsJson.luckyPair]);
+          setDailyLuckyPair(fsJson.luckyPair);
+        }
+        if (fsJson.autoLuckyPair) setAutoLuckyPair(fsJson.autoLuckyPair);
+        setManualLuckyPair(fsJson.manualLuckyPair || null);
         if (fsJson.nextUpdateDate) {
           setNextUpdateDate(fsJson.nextUpdateDate.split('-').reverse().join('/'));
         }
@@ -325,7 +394,7 @@ export default function UserDashboardPage() {
         .then((j) => {
           if (j?.orders) setAdminOrders(j.orders);
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [activeTab]);
 
@@ -361,7 +430,7 @@ export default function UserDashboardPage() {
           setChartFreqAll(computeProvinceFrequency(chartProvinceId, freqCycle));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       active = false;
     };
@@ -475,11 +544,14 @@ export default function UserDashboardPage() {
   const handleFengShuiLookup = (e: React.FormEvent) => {
     e.preventDefault();
     const el = FENG_SHUI_ELEMENTS.find((item) => item.id === selectedElementId) || FENG_SHUI_ELEMENTS[0];
-    const pairs = computeElementPairs(el.id, birthYear);
+    const resolvedCanChi = canChiInput.trim() || getCanChiFromYear(birthYear);
+    const pairs = computeElementPairs(el.id, birthYear, resolvedCanChi);
     setLookupResult({
       pairs,
       lunarDate: computeLunarLabel(new Date()),
       elementName: el.name,
+      canChi: resolvedCanChi,
+      birthYear,
     });
   };
 
@@ -535,7 +607,7 @@ export default function UserDashboardPage() {
     setChatInput('');
     try {
       localStorage.setItem(`minhluan_ai_quota_${new Date().toISOString().slice(0, 10)}`, String(nextCount));
-    } catch {}
+    } catch { }
 
     const topHot = [...chartFreqAll].sort((a, b) => b.count - a.count).slice(0, 3);
     const topGan = chartLoGan.slice(0, 2);
@@ -630,11 +702,10 @@ export default function UserDashboardPage() {
                   <button
                     type="button"
                     onClick={() => user && setPhoneVerifyOpen(true)}
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                      user?.isPhoneVerified
-                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                        : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25'
-                    }`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${user?.isPhoneVerified
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25'
+                      }`}
                   >
                     <Phone className="size-3" />
                     Xác thực SĐT: {user?.isPhoneVerified ? 'Đã xác thực' : 'Chưa xác thực'}
@@ -683,20 +754,18 @@ export default function UserDashboardPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTier('free')}
-                  className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${
-                    activeTier === 'free' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground'
-                  }`}
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${activeTier === 'free' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground'
+                    }`}
                 >
                   Free
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTier('vip')}
-                  className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold ${
-                    activeTier === 'vip'
-                      ? 'bg-gradient-to-r from-red-600 to-amber-600 text-white shadow-xs'
-                      : 'text-muted-foreground'
-                  }`}
+                  className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold ${activeTier === 'vip'
+                    ? 'bg-gradient-to-r from-red-600 to-amber-600 text-white shadow-xs'
+                    : 'text-muted-foreground'
+                    }`}
                 >
                   <Crown className="size-3" /> VIP
                 </button>
@@ -729,7 +798,7 @@ export default function UserDashboardPage() {
 
             <div className="rounded-2xl border bg-background p-3.5">
               <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
-                <span>Con Số May Mắn Hôm Nay</span>
+                <span>MAY MẮN MỖI NGÀY</span>
                 <Compass className="size-4 text-amber-500" />
               </div>
               <div className="mt-1.5 font-mono text-xl font-extrabold text-red-600 dark:text-amber-400">
@@ -766,17 +835,15 @@ export default function UserDashboardPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-                  isActive ? 'bg-red-600 text-white shadow-sm' : 'border bg-card text-foreground hover:bg-muted'
-                }`}
+                className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${isActive ? 'bg-red-600 text-white shadow-sm' : 'border bg-card text-foreground hover:bg-muted'
+                  }`}
               >
                 <tab.icon className="size-4" />
                 {tab.label}
                 {tab.vipOnly && (
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${
-                      isActive ? 'bg-amber-300 text-red-950' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                    }`}
+                    className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${isActive ? 'bg-amber-300 text-red-950' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                      }`}
                   >
                     VIP
                   </span>
@@ -806,9 +873,8 @@ export default function UserDashboardPage() {
                     key={f.id}
                     type="button"
                     onClick={() => setHistoryFilter(f.id as typeof historyFilter)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
-                      historyFilter === f.id ? 'bg-[#b80c0c] text-white' : 'border bg-card text-muted-foreground'
-                    }`}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold ${historyFilter === f.id ? 'bg-[#b80c0c] text-white' : 'border bg-card text-muted-foreground'
+                      }`}
                   >
                     {f.label}
                   </button>
@@ -971,32 +1037,41 @@ export default function UserDashboardPage() {
             />
           ) : (
             <div className="grid gap-6 lg:grid-cols-2">
-              {/* Khung bên trái: Con số may mắn hôm nay (1 cặp số duy nhất) */}
+              {/* Khung bên trái: Con số may mắn hôm nay (Tự động 2 số đuôi GĐB XSMB + Admin thêm bổ sung) */}
               <div className="rounded-3xl border-2 border-amber-400/50 bg-gradient-to-br from-amber-500/10 via-card to-red-500/5 p-6 shadow-sm flex flex-col justify-between">
                 <div>
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3 py-1 text-[11px] font-black text-amber-700 dark:text-amber-300">
-                    <Compass className="size-3.5" /> CON SỐ MAY MẮN HÔM NAY
+                    <Compass className="size-3.5" /> MAY MẮN MỖI NGÀY
                   </div>
                   <h2 className="mt-2 text-xl font-black text-foreground">
-                    Con Số May Mắn Hôm Nay
+                    Con Số Phong Thuỷ Hôm Nay Của Bạn?
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Tự động cập nhật từ 2 số cuối Giải Đặc Biệt XSMB ngày hôm trước lúc 18:35.
+                    Chọn cung mệnh Ngũ Hành và năm sinh để hệ thống luận giải con số đại cát trong ngày hôm nay.
                   </p>
 
-                  {/* Khung số thứ 3: Hiển thị duy nhất 1 cặp số */}
+                  {/* Hiển thị 2 số đuôi GĐB XSMB (và song song cặp số bổ sung nếu Admin có nhập thêm) */}
                   <div className="mt-5 rounded-2xl border bg-background p-6 text-center shadow-2xs">
                     <div className="text-xs font-bold uppercase text-muted-foreground mb-3">
-                      Cặp Số May Mắn Hôm Nay
+                      Cặp Số May Mắn (00:01 – 15:00)
                     </div>
-                    <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-red-600 to-amber-500 font-mono text-4xl font-black text-white shadow-md">
-                      {dailyLuckyPair}
+                    <div className="flex flex-wrap items-center justify-center gap-4">
+                      {dailyLuckyPairs.map((pair, idx) => (
+                        <div key={`${pair}-${idx}`} className="flex flex-col items-center gap-1.5">
+                          <div className="grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-red-600 to-amber-500 font-mono text-4xl font-black text-white shadow-md">
+                            {pair}
+                          </div>
+                          <span className="text-[10px] font-bold text-muted-foreground">
+                            {idx === 0 ? 'Đuôi G.ĐB XSMB' : 'Bổ sung hôm nay'}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 p-3 text-xs">
                     <span className="text-muted-foreground">
-                      Tự động cập nhật tiếp theo: <strong className="text-foreground">{tomorrowDisplay}</strong>
+                      Cập nhật tiếp theo: <strong className="text-foreground">{tomorrowDisplay}</strong>
                     </span>
                     <Link
                       href="/mua-ve-online"
@@ -1008,21 +1083,21 @@ export default function UserDashboardPage() {
                 </div>
 
                 <p className="mt-4 rounded-xl border border-amber-400/30 bg-amber-50/50 dark:bg-amber-950/20 p-3 text-[11px] italic leading-relaxed text-muted-foreground">
-                  Lưu ý nhỏ: Con số này mang ý nghĩa tham khảo theo phong thủy và tâm lý tích cực giúp bạn thêm vững tin, thoải mái tinh thần khi bước sang ngày mới. Chúc bạn một ngày mới vạn sự an lành và gặp nhiều may mắn!
+                  Lưu ý: Con số mang ý nghĩa tham khảo phong thủy giúp bạn thêm vững tin và gặp nhiều may mắn!
                 </p>
               </div>
 
-              {/* Khung bên phải: Tra cứu theo Mệnh & Năm sinh (gộp mục 1 & 3, xóa mục 2) */}
+              {/* Khung bên phải: Tra cứu theo Mệnh, Can Chi & Năm sinh */}
               <div className="rounded-3xl border-2 border-red-500/30 bg-gradient-to-br from-red-600/10 via-card to-amber-500/10 p-6 shadow-sm flex flex-col justify-between">
                 <div>
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-red-600/15 px-3 py-1 text-[11px] font-black text-red-600 dark:text-red-400">
-                    <MoonStar className="size-3.5" /> TRA CỨU THEO MỆNH &amp; NĂM SINH
+                    <MoonStar className="size-3.5" /> TRA CỨU THEO TUỔI / CAN CHI
                   </div>
                   <h2 className="mt-2 text-xl font-black text-foreground">
                     Tra Cứu Theo Mệnh &amp; Năm Sinh
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Chọn cung mệnh Ngũ Hành và nhập năm sinh để nhận 2 cặp số kèm ngày Âm lịch tương ứng.
+                    Chọn Ngũ Hành, nhập Can Chi và Năm sinh để nhận 2 cặp số may mắn theo ngày Âm lịch hôm nay.
                   </p>
 
                   <form onSubmit={handleFengShuiLookup} className="mt-4 space-y-3">
@@ -1032,28 +1107,95 @@ export default function UserDashboardPage() {
                           key={el.id}
                           type="button"
                           onClick={() => setSelectedElementId(el.id)}
-                          className={`rounded-xl px-3 py-1.5 text-xs font-black transition-all ${
-                            selectedElementId === el.id
-                              ? 'bg-red-600 text-white shadow-xs'
-                              : 'border bg-background text-foreground hover:bg-muted'
-                          }`}
+                          className={`rounded-xl px-3 py-1.5 text-xs font-black transition-all ${selectedElementId === el.id
+                            ? 'bg-red-600 text-white shadow-xs'
+                            : 'border bg-background text-foreground hover:bg-muted'
+                            }`}
                         >
                           {el.name}
                         </button>
                       ))}
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-bold text-muted-foreground">Năm sinh:</span>
-                      <input
-                        type="text"
-                        maxLength={4}
-                        required
-                        value={birthYear}
-                        onChange={(e) => setBirthYear(e.target.value.replace(/\D/g, ''))}
-                        placeholder="VD: 1992"
-                        className="w-28 rounded-lg border bg-background px-3 py-1.5 font-mono font-black outline-none focus:border-red-500"
-                      />
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <div className="relative flex items-center gap-1.5">
+                        <span className="font-bold text-muted-foreground">Can Chi:</span>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={canChiInput}
+                            autoComplete="off"
+                            onFocus={() => setCanChiDropdownOpen(true)}
+                            onBlur={() => setTimeout(() => setCanChiDropdownOpen(false), 120)}
+                            onChange={(e) => {
+                              setCanChiInput(e.target.value);
+                              setCanChiDropdownOpen(true);
+                            }}
+                            placeholder="VD: Quý Hợi"
+                            className="w-32 sm:w-36 rounded-lg border bg-background px-2.5 py-1.5 font-bold outline-none focus:border-red-500"
+                          />
+                          {canChiDropdownOpen && (
+                            <div className="absolute left-0 top-full z-30 mt-1 max-h-52 w-48 overflow-y-auto rounded-xl border bg-popover p-1 shadow-lg">
+                              {filteredCanChiOptions.length === 0 ? (
+                                <div className="px-2.5 py-2 text-[11px] text-muted-foreground">
+                                  Không tìm thấy Can Chi phù hợp
+                                </div>
+                              ) : (
+                                filteredCanChiOptions.map((opt) => {
+                                  const isSelected = foldVietnamese(canChiInput) === opt.folded;
+                                  return (
+                                    <button
+                                      key={opt.label}
+                                      type="button"
+                                      onMouseDown={(ev) => {
+                                        ev.preventDefault();
+                                        setCanChiInput(opt.label);
+                                        if (getCanChiFromYear(birthYear) !== opt.label) {
+                                          setBirthYear(String(opt.sampleYear));
+                                        }
+                                        setCanChiDropdownOpen(false);
+                                      }}
+                                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
+                                        isSelected
+                                          ? 'bg-red-600 font-black text-white'
+                                          : 'font-semibold text-popover-foreground hover:bg-muted'
+                                      }`}
+                                    >
+                                      <span>{opt.label}</span>
+                                      <span
+                                        className={`font-mono text-[10px] ${
+                                          isSelected ? 'text-amber-200' : 'text-muted-foreground'
+                                        }`}
+                                      >
+                                        {opt.sampleYear}
+                                      </span>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-muted-foreground">Năm sinh:</span>
+                        <input
+                          type="text"
+                          maxLength={4}
+                          required
+                          value={birthYear}
+                          onChange={(e) => {
+                            const cleaned = e.target.value.replace(/\D/g, '');
+                            setBirthYear(cleaned);
+                            if (cleaned.length === 4) {
+                              const autoCanChi = getCanChiFromYear(cleaned);
+                              if (autoCanChi) setCanChiInput(autoCanChi);
+                            }
+                          }}
+                          placeholder="VD: 1983"
+                          className="w-20 rounded-lg border bg-background px-2.5 py-1.5 font-mono font-black outline-none focus:border-red-500"
+                        />
+                      </div>
                       <button
                         type="submit"
                         className="rounded-xl bg-red-600 px-4 py-1.5 text-xs font-black text-white hover:bg-red-700"
@@ -1066,7 +1208,8 @@ export default function UserDashboardPage() {
                   {lookupResult && (
                     <div className="mt-4 rounded-2xl border bg-background p-4 text-center shadow-2xs">
                       <div className="text-xs font-bold text-red-600 dark:text-red-400">
-                        {lookupResult.elementName} · {lookupResult.lunarDate}
+                        {lookupResult.elementName}
+                        {lookupResult.canChi ? ` · ${lookupResult.canChi} (${lookupResult.birthYear})` : ''} · {lookupResult.lunarDate}
                       </div>
                       <div className="mt-3 flex items-center justify-center gap-4">
                         {lookupResult.pairs.map((pair) => (
@@ -1078,12 +1221,20 @@ export default function UserDashboardPage() {
                           </span>
                         ))}
                       </div>
+                      <div className="mt-4">
+                        <Link
+                          href="/mua-ve-online"
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-500 px-5 py-2 text-xs font-black text-white shadow-sm hover:opacity-95 transition-opacity"
+                        >
+                          Chọn vé ngay <ArrowRight className="size-3.5" />
+                        </Link>
+                      </div>
                     </div>
                   )}
                 </div>
 
                 <p className="mt-4 rounded-xl border border-red-500/20 bg-red-50/40 dark:bg-red-950/20 p-3 text-[11px] italic leading-relaxed text-muted-foreground">
-                  Lưu ý nhỏ: Những con số này mang ý nghĩa tham khảo theo phong thủy và tâm lý tích cực giúp bạn thêm vững tin, thoải mái tinh thần khi bước sang tháng mới. Chúc bạn một ngày mùng 1 đầu tháng vạn sự an lành và gặp nhiều may mắn!
+                  Lưu ý nhỏ: Những con số này mang ý nghĩa tham khảo theo phong thủy và tâm lý tích cực giúp bạn thêm vững tin, gặp nhiều may mắn!
                 </p>
               </div>
             </div>
@@ -1112,11 +1263,10 @@ export default function UserDashboardPage() {
                       key={reg.id}
                       type="button"
                       onClick={() => setChartRegion(reg.id as typeof chartRegion)}
-                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
-                        chartRegion === reg.id
-                          ? 'bg-red-600 text-white shadow-xs'
-                          : 'bg-muted/60 hover:bg-muted text-foreground'
-                      }`}
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${chartRegion === reg.id
+                        ? 'bg-red-600 text-white shadow-xs'
+                        : 'bg-muted/60 hover:bg-muted text-foreground'
+                        }`}
                     >
                       {reg.label}
                     </button>
@@ -1152,9 +1302,8 @@ export default function UserDashboardPage() {
                         key={c}
                         type="button"
                         onClick={() => setFreqCycle(c)}
-                        className={`rounded-lg px-2.5 py-1 font-bold ${
-                          freqCycle === c ? 'bg-red-600 text-white' : 'border bg-background hover:bg-muted'
-                        }`}
+                        className={`rounded-lg px-2.5 py-1 font-bold ${freqCycle === c ? 'bg-red-600 text-white' : 'border bg-background hover:bg-muted'
+                          }`}
                       >
                         {c} lần
                       </button>
@@ -1233,9 +1382,8 @@ export default function UserDashboardPage() {
                       return (
                         <div
                           key={num}
-                          className={`rounded p-1 ${
-                            c >= 3 ? 'bg-emerald-500/20 font-black text-emerald-700' : 'bg-muted/30 text-muted-foreground'
-                          }`}
+                          className={`rounded p-1 ${c >= 3 ? 'bg-emerald-500/20 font-black text-emerald-700' : 'bg-muted/30 text-muted-foreground'
+                            }`}
                           title={`Số ${num}: ${c} lần`}
                         >
                           <div>{num}</div>
@@ -1341,9 +1489,8 @@ export default function UserDashboardPage() {
                 {messages.map((m) => (
                   <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs ${
-                        m.role === 'user' ? 'bg-[#b80c0c] text-white' : 'border bg-muted/40'
-                      }`}
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs ${m.role === 'user' ? 'bg-[#b80c0c] text-white' : 'border bg-muted/40'
+                        }`}
                     >
                       {m.role === 'assistant' ? formatRichMessage(m.content) : m.content}
                     </div>
@@ -1427,11 +1574,10 @@ export default function UserDashboardPage() {
               ].map((plan) => (
                 <div
                   key={plan.months}
-                  className={`relative flex flex-col justify-between rounded-3xl border-2 p-5 shadow-sm ${
-                    plan.months === 12
-                      ? 'border-amber-400 bg-gradient-to-b from-amber-500/10 via-card to-red-500/5'
-                      : 'border-border bg-card'
-                  }`}
+                  className={`relative flex flex-col justify-between rounded-3xl border-2 p-5 shadow-sm ${plan.months === 12
+                    ? 'border-amber-400 bg-gradient-to-b from-amber-500/10 via-card to-red-500/5'
+                    : 'border-border bg-card'
+                    }`}
                 >
                   {plan.badge && (
                     <span className="absolute right-4 top-4 rounded-full bg-red-600 px-2.5 py-0.5 text-[10px] font-black uppercase text-white">
@@ -1472,7 +1618,7 @@ export default function UserDashboardPage() {
             )}
 
             <div className="grid gap-6 lg:grid-cols-2">
-              {/* 1. Ghi đè Con số may mắn hôm nay (00:01 - 15:00) */}
+              {/* 1. Thêm bổ sung Con số may mắn hôm nay (00:01 - 15:00) — không ghi đè đuôi GĐB */}
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -1484,34 +1630,60 @@ export default function UserDashboardPage() {
                   });
                   const json = await res.json();
                   if (!res.ok) {
-                    setAdminMsg(json.error || 'Không thể ghi đè.');
+                    setAdminMsg(json.error || 'Không thể thêm bổ sung số.');
                     return;
                   }
-                  setDailyLuckyPair(json.data.luckyPair);
-                  setAdminMsg(`Đã cập nhật số phong thủy hôm nay thành ${json.data.luckyPair}!`);
+                  if (Array.isArray(json.data?.luckyPairs)) {
+                    setDailyLuckyPairs(json.data.luckyPairs);
+                    setDailyLuckyPair(json.data.luckyPairs.join(', '));
+                  }
+                  setManualLuckyPair(json.data?.manualLuckyPair || null);
+                  setAdminLuckyInput('');
+                  setAdminMsg(
+                    `Đã thêm bổ sung cặp số ${json.data.manualLuckyPair}! Hiện đang hiển thị song song: ${json.data.luckyPair}`
+                  );
                 }}
                 className="rounded-2xl border bg-card p-5 shadow-xs space-y-3"
               >
                 <h3 className="text-sm font-black text-foreground flex items-center gap-2">
                   <Compass className="size-4 text-amber-500" />
-                  Cài Đặt Thủ Công Số Phong Thủy (00:01 – 15:00)
+                  Thêm Bổ Sung Số Phong Thủy (00:01 – 15:00)
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Ghi đè cặp số may mắn hiển thị ở tab Phong Thủy trong khung giờ 00:01 đến 15:00 hàng ngày.
+                  Cặp số đuôi G.ĐB XSMB tự động (<strong className="text-foreground font-mono">{autoLuckyPair}</strong>) luôn được giữ nguyên. Nhập thêm 1 cặp số để hiển thị song song (VD: <span className="font-mono font-bold">{autoLuckyPair}, 11</span>).
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
                     maxLength={2}
                     required
-                    placeholder="VD: 68"
+                    placeholder="VD: 11"
                     value={adminLuckyInput}
                     onChange={(e) => setAdminLuckyInput(e.target.value.replace(/\D/g, ''))}
                     className="w-28 rounded-xl border bg-background px-3 py-2 font-mono text-base font-black text-center"
                   />
-                  <button type="submit" className="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white">
-                    Lưu Ghi Đè
+                  <button type="submit" className="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700">
+                    Thêm Bổ Sung
                   </button>
+                  {manualLuckyPair && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setAdminMsg(null);
+                        const res = await fetch('/api/feng-shui/daily', { method: 'DELETE' });
+                        const json = await res.json();
+                        if (res.ok && json.data) {
+                          setDailyLuckyPairs(json.data.luckyPairs);
+                          setDailyLuckyPair(json.data.luckyPair);
+                          setManualLuckyPair(null);
+                          setAdminMsg(`Đã xóa số bổ sung. Hiện chỉ hiển thị đuôi G.ĐB tự động: ${json.data.luckyPair}`);
+                        }
+                      }}
+                      className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    >
+                      Xóa số thêm ({manualLuckyPair})
+                    </button>
+                  )}
                 </div>
               </form>
 

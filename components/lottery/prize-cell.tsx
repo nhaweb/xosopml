@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Loader2 } from 'lucide-react';
 import { formatPrizeNumber } from '@/lib/loto-calculator';
 
 interface PrizeCellProps {
@@ -24,10 +25,37 @@ export function PrizeCell({
   isCompact = false,
   isDenseRow = false,
 }: PrizeCellProps) {
+  const isPending = !numberStr || !/\d/.test(numberStr);
+
+  if (isPending) {
+    const spinnerSize =
+      isSpecial || isEighth || isSeventh
+        ? 'size-6 sm:size-7'
+        : isCompact
+        ? 'size-4'
+        : 'size-4 sm:size-5';
+    return (
+      <span
+        className="inline-flex items-center justify-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-red-600 dark:text-amber-400 animate-pulse"
+        title="Đang quay thưởng..."
+        aria-label="Đang quay thưởng"
+      >
+        <Loader2 className={`${spinnerSize} animate-spin stroke-[2.5]`} />
+      </span>
+    );
+  }
+
   const displayVal = formatPrizeNumber(numberStr, mode);
 
   if (!displayVal) {
-    return <span className="text-muted-foreground">-</span>;
+    return (
+      <span
+        className="inline-flex items-center justify-center rounded-full bg-amber-500/10 px-2 py-0.5 text-red-600 dark:text-amber-400 animate-pulse"
+        title="Đang quay thưởng..."
+      >
+        <Loader2 className="size-4 animate-spin stroke-[2.5]" />
+      </span>
+    );
   }
 
   // Tô màu nếu có số chạm được chọn
@@ -38,7 +66,11 @@ export function PrizeCell({
     sizeClasses = isCompact
       ? 'text-xl sm:text-2xl font-black tracking-wide text-red-600 dark:text-red-400 leading-tight'
       : 'text-2xl sm:text-[26px] md:text-[28px] font-black tracking-wide text-red-600 dark:text-red-400 leading-tight';
-  } else if (isEighth || isSeventh) {
+  } else if (isEighth) {
+    sizeClasses = isCompact
+      ? 'text-[22px] sm:text-[27px] font-black tracking-wide text-red-600 dark:text-red-400 leading-tight'
+      : 'text-[27px] sm:text-[29px] md:text-[31px] font-black tracking-wide text-red-600 dark:text-red-400 leading-tight';
+  } else if (isSeventh) {
     sizeClasses = isCompact
       ? 'text-xl sm:text-2xl font-black tracking-wide text-red-600 dark:text-red-400 leading-tight'
       : 'text-2xl sm:text-[26px] md:text-[28px] font-black tracking-wide text-red-600 dark:text-red-400 leading-tight';

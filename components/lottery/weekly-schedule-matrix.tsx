@@ -73,7 +73,9 @@ export function WeeklyScheduleMatrix() {
             {/* Hàng 1: Miền Nam */}
             <tr className="hover:bg-muted/15 transition-colors">
               <th scope="row" className="border-r px-2 py-3 text-center bg-muted/20 font-black text-red-600 dark:text-red-400">
-                <span className="block text-sm font-extrabold">Miền Nam</span>
+                <Link href="/ket-qua-xo-so/mien-nam" className="block text-sm font-extrabold hover:underline">
+                  Miền Nam
+                </Link>
                 <span className="text-[10px] text-muted-foreground font-normal">16:15</span>
               </th>
               {DAYS_OF_WEEK.map((d) => {
@@ -90,7 +92,7 @@ export function WeeklyScheduleMatrix() {
                       {list.map((p) => (
                         <Link
                           key={p.id}
-                          href={`/${p.region}/${p.id}`}
+                          href={`/ket-qua-xo-so/mien-nam/${p.id}`}
                           className="rounded-md px-1.5 py-0.5 text-xs font-semibold hover:bg-red-600 hover:text-white transition-colors"
                         >
                           {p.name}
@@ -105,7 +107,9 @@ export function WeeklyScheduleMatrix() {
             {/* Hàng 2: Miền Trung */}
             <tr className="hover:bg-muted/15 transition-colors">
               <th scope="row" className="border-r px-2 py-3 text-center bg-muted/20 font-black text-amber-600 dark:text-amber-400">
-                <span className="block text-sm font-extrabold">Miền Trung</span>
+                <Link href="/ket-qua-xo-so/mien-trung" className="block text-sm font-extrabold hover:underline">
+                  Miền Trung
+                </Link>
                 <span className="text-[10px] text-muted-foreground font-normal">17:15</span>
               </th>
               {DAYS_OF_WEEK.map((d) => {
@@ -122,7 +126,7 @@ export function WeeklyScheduleMatrix() {
                       {list.map((p) => (
                         <Link
                           key={p.id}
-                          href={`/${p.region}/${p.id}`}
+                          href={`/ket-qua-xo-so/mien-trung/${p.id}`}
                           className="rounded-md px-1.5 py-0.5 text-xs font-semibold hover:bg-amber-600 hover:text-white transition-colors"
                         >
                           {p.name}
@@ -137,7 +141,9 @@ export function WeeklyScheduleMatrix() {
             {/* Hàng 3: Miền Bắc */}
             <tr className="hover:bg-muted/15 transition-colors">
               <th scope="row" className="border-r px-2 py-3 text-center bg-muted/20 font-black text-blue-600 dark:text-blue-400">
-                <span className="block text-sm font-extrabold">Miền Bắc</span>
+                <Link href="/ket-qua-xo-so/mien-bac" className="block text-sm font-extrabold hover:underline">
+                  Miền Bắc
+                </Link>
                 <span className="text-[10px] text-muted-foreground font-normal">18:15</span>
               </th>
               {DAYS_OF_WEEK.map((d) => {
@@ -154,7 +160,7 @@ export function WeeklyScheduleMatrix() {
                       {list.map((p) => (
                         <Link
                           key={p.id}
-                          href={`/${p.region}/${p.id}`}
+                          href={`/ket-qua-xo-so/mien-bac/${p.id}`}
                           className="rounded-md px-1.5 py-0.5 text-xs font-semibold hover:bg-blue-600 hover:text-white transition-colors"
                         >
                           {p.name}
