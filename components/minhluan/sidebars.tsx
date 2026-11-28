@@ -16,9 +16,10 @@ import {
   Coins,
   ShieldCheck,
 } from 'lucide-react';
-import { DayLotteryData } from '@/types/lottery';
-import { PROVINCES, sortProvincesCanonical } from '@/config/lottery-provinces';
+import { DayLotteryData, Region } from '@/types/lottery';
+import { getProvincesByDay, PROVINCES } from '@/config/lottery-provinces';
 import { siteConfig } from '@/config/site';
+import { formatDate } from '@/lib/format';
 import {
   DrawPhaseStatus,
   getDisplayStatusBadge,
@@ -351,7 +352,7 @@ export function LeftSidebar({
           <div className="text-center leading-tight">
             <div className="text-[11px] font-black text-foreground">Kết quả xổ số Hôm Nay</div>
             <div className="text-[10px] text-muted-foreground">
-              {WEEKDAYS_VN[activeDate.getDay()]} - Ngày {lotteryData.formattedDate}
+              {formatDate(activeDate)}
             </div>
           </div>
           <button
@@ -369,71 +370,59 @@ export function LeftSidebar({
         </div>
 
         <div className="space-y-2.5 p-2 text-[11px]">
-          <div>
-            <div className="flex items-center justify-between gap-1">
-              <Link href="/ket-qua-xo-so/mien-nam" className="font-black text-red-700 dark:text-red-400 hover:underline">
-                ▼ Xổ số Miền Nam
-              </Link>
-              {renderStatusPill(southStatus)}
-            </div>
-            <ul className="mt-1 space-y-1 pl-2">
-              {sortProvincesCanonical(lotteryData.south).map((p) => (
-                <li key={p.provinceId} className="flex items-center justify-between gap-1">
+          {(
+            [
+              {
+                key: 'south' as Region,
+                slug: 'mien-nam',
+                label: 'Xổ số Miền Nam',
+                status: southStatus,
+              },
+              {
+                key: 'central' as Region,
+                slug: 'mien-trung',
+                label: 'Xổ số Miền Trung',
+                status: centralStatus,
+              },
+              {
+                key: 'north' as Region,
+                slug: 'mien-bac',
+                label: 'Xổ số Miền Bắc',
+                status: northStatus,
+              },
+            ]
+              // Đưa miền đang sổ (Đang sổ) lên đầu tiên để người dùng theo dõi trực tiếp
+              .sort((a, b) => (a.status === 'live' ? -1 : b.status === 'live' ? 1 : 0))
+          ).map((reg) => {
+            // Luôn lấy đúng danh sách đài mở thưởng theo lịch của ngày activeDate (tránh hiển thị nhầm đài ngày cũ khi đang sổ)
+            const scheduledProvinces = getProvincesByDay(activeDate.getDay(), reg.key);
+            return (
+              <div key={reg.key}>
+                <div className="flex items-center justify-between gap-1">
                   <Link
-                    href={`/ket-qua-xo-so/mien-nam/${p.provinceId}`}
-                    className="truncate hover:text-red-600 hover:underline"
+                    href={`/ket-qua-xo-so/${reg.slug}`}
+                    className="font-black text-red-700 dark:text-red-400 hover:underline"
                   >
-                    ▸ Kết quả xổ số {p.provinceName}
+                    ▼ {reg.label}
                   </Link>
-                  {renderProvinceStatusIcon(southStatus)}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-1">
-              <Link href="/ket-qua-xo-so/mien-bac" className="font-black text-red-700 dark:text-red-400 hover:underline">
-                ▼ Xổ số Miền Bắc
-              </Link>
-              {renderStatusPill(northStatus)}
-            </div>
-            <ul className="mt-1 space-y-1 pl-2">
-              {lotteryData.north.map((p) => (
-                <li key={p.provinceId} className="flex items-center justify-between gap-1">
-                  <Link
-                    href={`/ket-qua-xo-so/mien-bac/${p.provinceId}`}
-                    className="truncate hover:text-red-600 hover:underline"
-                  >
-                    ▸ Kết quả xổ số {p.provinceName}
-                  </Link>
-                  {renderProvinceStatusIcon(northStatus)}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-1">
-              <Link href="/ket-qua-xo-so/mien-trung" className="font-black text-red-700 dark:text-red-400 hover:underline">
-                ▼ Xổ số Miền Trung
-              </Link>
-              {renderStatusPill(centralStatus)}
-            </div>
-            <ul className="mt-1 space-y-1 pl-2">
-              {lotteryData.central.map((p) => (
-                <li key={p.provinceId} className="flex items-center justify-between gap-1">
-                  <Link
-                    href={`/ket-qua-xo-so/mien-trung/${p.provinceId}`}
-                    className="truncate hover:text-red-600 hover:underline"
-                  >
-                    ▸ Kết quả xổ số {p.provinceName}
-                  </Link>
-                  {renderProvinceStatusIcon(centralStatus)}
-                </li>
-              ))}
-            </ul>
-          </div>
+                  {renderStatusPill(reg.status)}
+                </div>
+                <ul className="mt-1 space-y-1 pl-2">
+                  {scheduledProvinces.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-1">
+                      <Link
+                        href={`/ket-qua-xo-so/${reg.slug}/${p.id}`}
+                        className="truncate hover:text-red-600 hover:underline"
+                      >
+                        ▸ Kết quả xổ số {p.name}
+                      </Link>
+                      {renderProvinceStatusIcon(reg.status)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
 
         {/* Chú thích 3 trạng thái chuẩn: Chờ / Đang sổ / Mới */}

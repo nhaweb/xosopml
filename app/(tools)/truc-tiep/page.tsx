@@ -2,7 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Radio, Clock, RefreshCw, Check } from 'lucide-react';
+import { Radio, Clock, Check } from 'lucide-react';
 import { SiteFrame } from '@/components/site/site-frame';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
 import { PreDrawScheduleCard } from '@/components/lottery/pre-draw-schedule-card';
@@ -27,6 +27,12 @@ function toIsoDate(d: Date): string {
 function parseRegionParam(raw: string | null): Region {
   if (raw === 'mien-trung' || raw === 'central' || raw === 'xsmt') return 'central';
   if (raw === 'mien-bac' || raw === 'north' || raw === 'xsmb') return 'north';
+  if (raw === 'mien-nam' || raw === 'south' || raw === 'xsmn') return 'south';
+  // Tự động ưu tiên miền đang ở trạng thái Đang sổ nếu không truyền ?mien=
+  const now = new Date();
+  if (getRegionDrawStatus('south', now, now) === 'live') return 'south';
+  if (getRegionDrawStatus('central', now, now) === 'live') return 'central';
+  if (getRegionDrawStatus('north', now, now) === 'live') return 'north';
   return 'south';
 }
 
@@ -58,9 +64,10 @@ function TrucTiepContent() {
     async (silent = false) => {
       if (!silent) setIsLoading(true);
       try {
-        const res = await fetch(`/api/xoso/draws?date=${toIsoDate(todayDate)}`, {
-          cache: 'no-store',
-        });
+        const fetchOpts: RequestInit = isAnyRegionLiveOrUpcoming(new Date())
+          ? { cache: 'no-store' }
+          : {};
+        const res = await fetch(`/api/xoso/draws?date=${toIsoDate(todayDate)}`, fetchOpts);
         if (res.ok) {
           const json = await res.json();
           if (json?.data) {
@@ -87,14 +94,24 @@ function TrucTiepContent() {
     loadTodayDraws(false);
   }, [loadTodayDraws]);
 
-  // Tự động polling mỗi 10 giây trong khung giờ cận quay & đang quay trực tiếp
+  // Chỉ tự động polling ngầm trong khung giờ quay thưởng trực tiếp (15s khi tab đang hiển thị);
+  // ngoài giờ xổ tắt hoàn toàn polling để tránh tốn lượt gọi API không cần thiết
   useEffect(() => {
     const interval = setInterval(() => {
-      if (isAnyRegionLiveOrUpcoming(new Date())) {
+      if (document.visibilityState === 'visible' && isAnyRegionLiveOrUpcoming(new Date())) {
         loadTodayDraws(true);
       }
-    }, 10_000);
-    return () => clearInterval(interval);
+    }, 15_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && isAnyRegionLiveOrUpcoming(new Date())) {
+        loadTodayDraws(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [loadTodayDraws]);
 
   const handleSelectRegion = (reg: Region) => {
@@ -169,16 +186,6 @@ function TrucTiepContent() {
                   <Clock className="size-3.5" /> Chờ ({REGION_DRAW_WINDOWS[selectedRegion].drawTimeLabel})
                 </span>
               )}
-
-              <button
-                type="button"
-                onClick={() => loadTodayDraws(false)}
-                className="inline-flex items-center gap-1 rounded-lg border bg-background px-2.5 py-1.5 text-xs font-bold hover:bg-muted transition-colors"
-                title="Cập nhật kết quả mới nhất"
-              >
-                <RefreshCw className={`size-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                Làm mới
-              </button>
             </div>
           </div>
 
@@ -247,8 +254,9 @@ function TrucTiepContent() {
             title={regionConfig.title}
             regionCode={regionConfig.regionCode}
             drawTime={regionConfig.drawTime}
-            dateStr={lotteryData.formattedDate}
+            dateStr={phase === 'live' ? todayFormatted : lotteryData.formattedDate}
             results={regionConfig.results}
+            isLive={phase === 'live'}
           />
         )}
       </div>

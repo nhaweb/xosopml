@@ -7,7 +7,7 @@ import { Sparkles, ArrowRight, Coins } from 'lucide-react';
 const SLIDES = [
   {
     text: 'MUA VÉ SỐ ONLINE',
-    subtext: 'Chọn vé theo ảnh chụp thật · Giao tận nơi < 5km hoặc Giữ hộ an toàn',
+    subtext: 'Chọn vé theo ảnh chụp thật · Giao tận nơi < 9km hoặc Giữ hộ an toàn',
     href: '/mua-ve-online',
     cta: 'Chọn Số Ngay',
   },

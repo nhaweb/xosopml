@@ -20,6 +20,8 @@ interface RegionLotteryBoardProps {
   provinceCodeOverrides?: Record<string, string>;
   /** Chế độ hiển thị mặc định (vd: 'last2' khi tra cứu Đầu đuôi) */
   initialMode?: 'full' | 'last2' | 'last3';
+  /** Đang trong giờ quay trực tiếp (hiển thị nhãn Đang sổ trực tiếp nổi bật) */
+  isLive?: boolean;
   /** Nút đóng bảng (dùng cho kết quả Tra Cứu trực tiếp trên Homepage) */
   onClose?: () => void;
 }
@@ -33,6 +35,7 @@ export function RegionLotteryBoard({
   results,
   provinceCodeOverrides,
   initialMode = 'full',
+  isLive = false,
   onClose,
 }: RegionLotteryBoardProps) {
   const [mode, setMode] = useState<'full' | 'last2' | 'last3'>(initialMode);
@@ -88,6 +91,11 @@ export function RegionLotteryBoard({
               <h2 className="text-sm sm:text-base font-black uppercase tracking-tight text-white">
                 {title}
               </h2>
+              {isLive && (
+                <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[10px] font-black text-red-700 animate-pulse">
+                  <span className="text-[9px]">■</span> ĐANG SỔ TRỰC TIẾP
+                </span>
+              )}
               <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-black text-red-950">
                 {regionCode}
               </span>

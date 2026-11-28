@@ -183,3 +183,36 @@ export function isAnyRegionLiveOrUpcoming(now: Date = new Date()): boolean {
   return vn.totalMinutes >= 965 && vn.totalMinutes <= 1125;
 }
 
+/**
+ * Xác định ngày mở thưởng XSMN sớm nhất hợp lệ để đăng vé lên kho bán online (theo giờ VN):
+ * - Trước 16:15: Ngày hôm nay
+ * - Từ 16:15 trở đi (đã tới/qua giờ mở thưởng XSMN): Tự động nhảy sang Ngày mai
+ */
+export function getEarliestValidSouthDrawDate(now: Date = new Date()): {
+  minDrawDate: string; // YYYY-MM-DD
+  isPastTodayCutoff: boolean;
+} {
+  const vn = getVietnamClock(now);
+  const cutoffMinutes = REGION_DRAW_WINDOWS.south.liveStartMin; // 16:15 = 975 phút
+  const isPastTodayCutoff = vn.totalMinutes >= cutoffMinutes;
+
+  if (!isPastTodayCutoff) {
+    return {
+      minDrawDate: vn.isoDate,
+      isPastTodayCutoff: false,
+    };
+  }
+
+  const [y, m, d] = vn.isoDate.split('-').map(Number);
+  const tomorrow = new Date(Date.UTC(y, m - 1, d + 1, 12, 0, 0));
+  const minDrawDate = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(
+    2,
+    '0'
+  )}-${String(tomorrow.getUTCDate()).padStart(2, '0')}`;
+
+  return {
+    minDrawDate,
+    isPastTodayCutoff: true,
+  };
+}
+

@@ -19,6 +19,8 @@ import {
   ShoppingBag,
   Lock,
   Check,
+  CheckCircle2,
+  X,
   Truck,
   ArrowRight,
   MessageSquare,
@@ -35,9 +37,14 @@ import {
   Upload,
 } from 'lucide-react';
 import { SiteFrame } from '@/components/site/site-frame';
-import { PROVINCES } from '@/config/lottery-provinces';
+import {
+  PROVINCES,
+  getProvincesByDay,
+  sortProvincesCanonical,
+} from '@/config/lottery-provinces';
 import { calculateLoGan } from '@/lib/stats-calculator';
 import { getLotteryResults } from '@/lib/mock-lottery-data';
+import { getEarliestValidSouthDrawDate } from '@/lib/draw-schedule-status';
 
 function formatRichMessage(text: string): React.ReactNode {
   return text.split('\n').map((line, lineIdx) => {
@@ -116,10 +123,26 @@ interface ChatMessage {
 const MAX_DAILY_AI_MESSAGES = 10;
 
 const PRESET_AI_QUESTIONS = [
-  'Nay chọn con số mấy đài Đồng Tháp?',
-  'Thống kê cho mình 2 cặp số lâu ra nhất đài Đồng Tháp trong 10 ngày qua',
-  'Phân tích cầu loto đầu đuôi và cặp số đẹp dễ về nhất đài TP.HCM hôm nay?',
+  'Hôm nay nên chọn cặp số mấy?',
+  'Thống kê 2 cặp số lâu ra nhất Miền Nam trong 10 ngày qua',
+  'Phân tích cầu loto đầu đuôi và cặp số đẹp dễ về nhất hôm nay',
 ];
+
+const SUPER_ADMIN_EMAILS = new Set([
+  'admin@xosominhluan.vn',
+  'superadmin@xosominhluan.vn',
+  'support@xosominhluan.vn',
+  ...(process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+]);
+
+function checkIsSuperAdmin(profile: UserProfile | null): boolean {
+  if (!profile) return false;
+  if (profile.role === 'SUPER_ADMIN') return true;
+  return Boolean(profile.email && SUPER_ADMIN_EMAILS.has(profile.email.trim().toLowerCase()));
+}
 
 const FENG_SHUI_ELEMENTS = [
   { id: 'kim', name: 'Mệnh Kim' },
@@ -237,6 +260,60 @@ function computeProvinceFrequency(provinceId: string, periods = 30) {
     .sort((a, b) => b.count - a.count || a.number.localeCompare(b.number));
 }
 
+function computeRegionFrequency(region: 'north' | 'central' | 'south', periods = 30) {
+  const counts = new Map<string, number>();
+  for (let i = 0; i < 100; i++) counts.set(String(i).padStart(2, '0'), 0);
+  const now = new Date();
+  for (let offset = 0; offset < periods; offset++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - offset);
+    const dayData = getLotteryResults(d);
+    const draws = dayData[region] || [];
+    for (const draw of draws) {
+      for (const prize of draw.prizes) {
+        for (const num of prize.numbers) {
+          if (num.length >= 2) {
+            const pair = num.slice(-2);
+            if (/^\d{2}$/.test(pair)) {
+              counts.set(pair, (counts.get(pair) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+  }
+  return Array.from(counts.entries())
+    .map(([number, count]) => ({ number, count }))
+    .sort((a, b) => b.count - a.count || a.number.localeCompare(b.number));
+}
+
+function computeRegionLoGan(region: 'north' | 'central' | 'south') {
+  const regionProvs = PROVINCES.filter((p) => p.region === region);
+  const byNumber = new Map<string, { number: string; daysUnopened: number; maxGanHistory: number }>();
+
+  for (const prov of regionProvs) {
+    const items = calculateLoGan(prov.id);
+    for (const item of items) {
+      const prev = byNumber.get(item.number);
+      if (!prev) {
+        byNumber.set(item.number, {
+          number: item.number,
+          daysUnopened: item.daysUnopened,
+          maxGanHistory: item.maxGanHistory,
+        });
+      } else {
+        byNumber.set(item.number, {
+          number: item.number,
+          daysUnopened: Math.min(prev.daysUnopened, item.daysUnopened),
+          maxGanHistory: Math.max(prev.maxGanHistory, item.maxGanHistory),
+        });
+      }
+    }
+  }
+
+  return Array.from(byNumber.values()).sort((a, b) => b.daysUnopened - a.daysUnopened);
+}
+
 export default function UserDashboardPage() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [activeTier, setActiveTier] = useState<'free' | 'vip'>('free');
@@ -289,6 +366,7 @@ export default function UserDashboardPage() {
       (opt) => opt.folded.includes(q) || String(opt.sampleYear).includes(q)
     );
   }, [canChiInput]);
+  const [birthYearError, setBirthYearError] = useState<string | null>(null);
   const [lookupResult, setLookupResult] = useState<{
     pairs: [string, string];
     lunarDate: string;
@@ -297,20 +375,22 @@ export default function UserDashboardPage() {
     birthYear: string;
   } | null>(null);
 
-  // Charts state (3 regions + filtered provinces + 3 charts/tables)
-  const [chartRegion, setChartRegion] = useState<'north' | 'central' | 'south'>('north');
+  // Charts state (3 regions + default 'ALL' tổng hợp toàn miền + dropdown lọc từng đài)
+  const [chartRegion, setChartRegion] = useState<'north' | 'central' | 'south'>('south');
   const regionProvinces = useMemo(
-    () => PROVINCES.filter((p) => p.region === chartRegion),
+    () => sortProvincesCanonical(PROVINCES.filter((p) => p.region === chartRegion)),
     [chartRegion]
   );
-  const [chartProvinceId, setChartProvinceId] = useState('ha-noi');
+  const [chartProvinceId, setChartProvinceId] = useState<string>('ALL');
   const [freqCycle, setFreqCycle] = useState<5 | 10 | 30>(30);
   const [chartLoGan, setChartLoGan] = useState<
     Array<{ number: string; daysUnopened: number; maxGanHistory: number }>
-  >(() => calculateLoGan('ha-noi'));
+  >(() => computeRegionLoGan('south'));
   const [chartFreqAll, setChartFreqAll] = useState<Array<{ number: string; count: number }>>(() =>
-    computeProvinceFrequency('ha-noi', 30)
+    computeRegionFrequency('south', 30)
   );
+
+  const isSuperAdmin = useMemo(() => checkIsSuperAdmin(user), [user]);
 
   // VIP upgrade feedback
   const [vipStatusMsg, setVipStatusMsg] = useState<string | null>(null);
@@ -318,15 +398,86 @@ export default function UserDashboardPage() {
 
   // Admin panel state
   const [adminLuckyInput, setAdminLuckyInput] = useState('');
-  const [adminMsg, setAdminMsg] = useState<string | null>(null);
+  const [adminNotice, setAdminNotice] = useState<{
+    id: number;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+    action?: {
+      label: string;
+      href?: string;
+      onClick?: () => void;
+    };
+  } | null>(null);
+  const showAdminNotice = useCallback(
+    (
+      message: string,
+      type: 'success' | 'error' = 'success',
+      title?: string,
+      action?: { label: string; href?: string; onClick?: () => void }
+    ) => {
+      setAdminNotice({
+        id: Date.now(),
+        type,
+        title: title || (type === 'error' ? 'Thông báo lỗi' : 'Thành công'),
+        message,
+        action,
+      });
+    },
+    []
+  );
   const [adminOrders, setAdminOrders] = useState<DbOrder[]>([]);
-  const [newTicketProv, setNewTicketProv] = useState('Đồng Nai');
-  const [newTicketDate, setNewTicketDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [minTicketDateInfo, setMinTicketDateInfo] = useState(() =>
+    getEarliestValidSouthDrawDate()
+  );
+  const [newTicketDate, setNewTicketDate] = useState(
+    () => getEarliestValidSouthDrawDate().minDrawDate
+  );
+  const scheduledSouthProvinces = useMemo(() => {
+    const [y, m, d] = newTicketDate.split('-').map(Number);
+    const dt = y && m && d ? new Date(y, m - 1, d, 12, 0, 0) : new Date();
+    const list = sortProvincesCanonical(getProvincesByDay(dt.getDay(), 'south'));
+    return list.length > 0
+      ? list
+      : sortProvincesCanonical(PROVINCES.filter((p) => p.region === 'south'));
+  }, [newTicketDate]);
+  const [newTicketProv, setNewTicketProv] = useState<string>(
+    () => scheduledSouthProvinces[0]?.name || 'TP.HCM'
+  );
   const [newTicketNum, setNewTicketNum] = useState('');
-  const [newTicketQty, setNewTicketQty] = useState(16);
+  const [newTicketQty, setNewTicketQty] = useState<16 | 160>(16);
   const [newTicketShowBadge, setNewTicketShowBadge] = useState(false);
   const [newTicketBadgeText, setNewTicketBadgeText] = useState('Số Đẹp');
   const [orderPhotoDrafts, setOrderPhotoDrafts] = useState<Record<string, string>>({});
+
+  // Tự động kiểm tra mốc 16:15 giờ VN mỗi 30 giây: nếu qua 16:15 tự chuyển sang ngày mai
+  useEffect(() => {
+    const syncCutoff = () => {
+      const nextInfo = getEarliestValidSouthDrawDate();
+      setMinTicketDateInfo(nextInfo);
+      setNewTicketDate((prev) => (prev < nextInfo.minDrawDate ? nextInfo.minDrawDate : prev));
+    };
+    syncCutoff();
+    const timer = setInterval(syncCutoff, 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Tự động đồng bộ dropdown đài khi Admin đổi ngày mở thưởng
+  useEffect(() => {
+    if (
+      scheduledSouthProvinces.length > 0 &&
+      !scheduledSouthProvinces.some((p) => p.name === newTicketProv)
+    ) {
+      setNewTicketProv(scheduledSouthProvinces[0].name);
+    }
+  }, [scheduledSouthProvinces, newTicketProv]);
+
+  // Chặn tài khoản không phải SUPER_ADMIN truy cập tab Quản Trị
+  useEffect(() => {
+    if (activeTab === 'admin' && !isSuperAdmin) {
+      setActiveTab('history');
+    }
+  }, [activeTab, isSuperAdmin]);
 
   // AI Chat
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -388,7 +539,7 @@ export default function UserDashboardPage() {
   }, [loadUserAndOrders]);
 
   useEffect(() => {
-    if (activeTab === 'admin') {
+    if (activeTab === 'admin' && isSuperAdmin) {
       fetch('/api/orders?admin=1')
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
@@ -396,19 +547,92 @@ export default function UserDashboardPage() {
         })
         .catch(() => { });
     }
-  }, [activeTab]);
+  }, [activeTab, isSuperAdmin]);
 
-  // Sync province dropdown when region changes
-  useEffect(() => {
-    const first = regionProvinces[0];
-    if (first && !regionProvinces.some((p) => p.id === chartProvinceId)) {
-      setChartProvinceId(first.id);
-    }
-  }, [chartRegion, regionProvinces, chartProvinceId]);
+  // Khi chuyển miền -> mặc định chọn 'ALL' (tự động tổng hợp tất cả các đài thuộc miền đó)
+  const handleSelectChartRegion = (reg: 'north' | 'central' | 'south') => {
+    setChartRegion(reg);
+    setChartProvinceId('ALL');
+  };
 
-  // Load chart stats
+  // Load chart stats (hỗ trợ cả tổng hợp toàn miền 'ALL' lẫn lọc riêng từng đài)
   useEffect(() => {
     let active = true;
+
+    if (chartProvinceId === 'ALL') {
+      // Hiển thị ngay dữ liệu tổng hợp toàn miền tức thì
+      setChartLoGan(computeRegionLoGan(chartRegion));
+      setChartFreqAll(computeRegionFrequency(chartRegion, freqCycle));
+
+      // Đồng thời tổng hợp từ API thực tế cho các đài đại diện trong miền để đảm bảo chính xác nhất
+      const sampleProvs = regionProvinces.slice(0, 6);
+      Promise.all(
+        sampleProvs.map((p) =>
+          Promise.all([
+            fetch(`/api/xoso/stats?type=lo-gan&province=${encodeURIComponent(p.id)}`).then((r) =>
+              r.ok ? r.json() : null
+            ),
+            fetch(
+              `/api/xoso/stats?type=frequency&province=${encodeURIComponent(p.id)}&limit=${freqCycle}`
+            ).then((r) => (r.ok ? r.json() : null)),
+          ])
+        )
+      )
+        .then((results) => {
+          if (!active) return;
+          const ganMap = new Map<string, { number: string; daysUnopened: number; maxGanHistory: number }>();
+          const freqMap = new Map<string, number>();
+          let hasGanData = false;
+          let hasFreqData = false;
+
+          for (const [ganJson, freqJson] of results) {
+            if (Array.isArray(ganJson?.data) && ganJson.data.length > 0) {
+              hasGanData = true;
+              for (const item of ganJson.data) {
+                const prev = ganMap.get(item.number);
+                if (!prev) {
+                  ganMap.set(item.number, {
+                    number: item.number,
+                    daysUnopened: item.daysUnopened,
+                    maxGanHistory: item.maxGanHistory,
+                  });
+                } else {
+                  ganMap.set(item.number, {
+                    number: item.number,
+                    daysUnopened: Math.min(prev.daysUnopened, item.daysUnopened),
+                    maxGanHistory: Math.max(prev.maxGanHistory, item.maxGanHistory),
+                  });
+                }
+              }
+            }
+            if (Array.isArray(freqJson?.data) && freqJson.data.length > 0) {
+              hasFreqData = true;
+              for (const item of freqJson.data) {
+                freqMap.set(item.number, (freqMap.get(item.number) || 0) + (item.count || 0));
+              }
+            }
+          }
+
+          if (hasGanData && ganMap.size > 0) {
+            setChartLoGan(
+              Array.from(ganMap.values()).sort((a, b) => b.daysUnopened - a.daysUnopened)
+            );
+          }
+          if (hasFreqData && freqMap.size > 0) {
+            setChartFreqAll(
+              Array.from(freqMap.entries())
+                .map(([number, count]) => ({ number, count }))
+                .sort((a, b) => b.count - a.count || a.number.localeCompare(b.number))
+            );
+          }
+        })
+        .catch(() => { });
+
+      return () => {
+        active = false;
+      };
+    }
+
     Promise.all([
       fetch(`/api/xoso/stats?type=lo-gan&province=${encodeURIComponent(chartProvinceId)}`).then((r) =>
         r.ok ? r.json() : null
@@ -434,7 +658,7 @@ export default function UserDashboardPage() {
     return () => {
       active = false;
     };
-  }, [chartProvinceId, freqCycle]);
+  }, [chartRegion, chartProvinceId, freqCycle, regionProvinces]);
 
   useEffect(() => {
     try {
@@ -543,15 +767,23 @@ export default function UserDashboardPage() {
 
   const handleFengShuiLookup = (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedYear = birthYear.trim();
+    const maxYear = new Date().getFullYear();
+    const parsedYear = Number(trimmedYear);
+    if (!/^\d{4}$/.test(trimmedYear) || parsedYear < 1900 || parsedYear > maxYear) {
+      setBirthYearError(`Vui lòng nhập đủ 4 chữ số năm sinh hợp lệ (từ 1900 đến ${maxYear}).`);
+      return;
+    }
+    setBirthYearError(null);
     const el = FENG_SHUI_ELEMENTS.find((item) => item.id === selectedElementId) || FENG_SHUI_ELEMENTS[0];
-    const resolvedCanChi = canChiInput.trim() || getCanChiFromYear(birthYear);
-    const pairs = computeElementPairs(el.id, birthYear, resolvedCanChi);
+    const resolvedCanChi = canChiInput.trim() || getCanChiFromYear(trimmedYear);
+    const pairs = computeElementPairs(el.id, trimmedYear, resolvedCanChi);
     setLookupResult({
       pairs,
       lunarDate: computeLunarLabel(new Date()),
       elementName: el.name,
       canChi: resolvedCanChi,
-      birthYear,
+      birthYear: trimmedYear,
     });
   };
 
@@ -818,7 +1050,7 @@ export default function UserDashboardPage() {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
+        {/* Navigation Tabs — Tab Quản Trị chỉ hiển thị duy nhất cho SUPER_ADMIN */}
         <div className="mb-6 flex flex-wrap gap-1.5 border-b pb-3">
           {[
             { id: 'history', label: 'Lịch Sử Mua Vé', icon: Wallet, vipOnly: false },
@@ -827,7 +1059,9 @@ export default function UserDashboardPage() {
             { id: 'charts', label: 'Biểu Đồ Chuyên Sâu', icon: BarChart3, vipOnly: true },
             { id: 'ai_chat', label: 'Chat Trợ Lý Ảo (10/ngày)', icon: MessageSquare, vipOnly: true },
             { id: 'upgrade', label: 'Nâng Cấp Thành Viên', icon: Crown, vipOnly: false },
-            { id: 'admin', label: 'Quản Trị (Admin)', icon: Settings, vipOnly: false },
+            ...(isSuperAdmin
+              ? [{ id: 'admin', label: 'Quản Trị', icon: Settings, vipOnly: false }]
+              : []),
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -1050,20 +1284,18 @@ export default function UserDashboardPage() {
                     Chọn cung mệnh Ngũ Hành và năm sinh để hệ thống luận giải con số đại cát trong ngày hôm nay.
                   </p>
 
-                  {/* Hiển thị 2 số đuôi GĐB XSMB (và song song cặp số bổ sung nếu Admin có nhập thêm) */}
+                  {/* Hiển thị cặp số may mắn (tự động + bổ sung nếu có) */}
                   <div className="mt-5 rounded-2xl border bg-background p-6 text-center shadow-2xs">
                     <div className="text-xs font-bold uppercase text-muted-foreground mb-3">
-                      Cặp Số May Mắn (00:01 – 15:00)
+                      Cặp Số May Mắn Hôm Nay
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-4">
                       {dailyLuckyPairs.map((pair, idx) => (
-                        <div key={`${pair}-${idx}`} className="flex flex-col items-center gap-1.5">
-                          <div className="grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-red-600 to-amber-500 font-mono text-4xl font-black text-white shadow-md">
-                            {pair}
-                          </div>
-                          <span className="text-[10px] font-bold text-muted-foreground">
-                            {idx === 0 ? 'Đuôi G.ĐB XSMB' : 'Bổ sung hôm nay'}
-                          </span>
+                        <div
+                          key={`${pair}-${idx}`}
+                          className="grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-red-600 to-amber-500 font-mono text-4xl font-black text-white shadow-md"
+                        >
+                          {pair}
                         </div>
                       ))}
                     </div>
@@ -1081,10 +1313,6 @@ export default function UserDashboardPage() {
                     </Link>
                   </div>
                 </div>
-
-                <p className="mt-4 rounded-xl border border-amber-400/30 bg-amber-50/50 dark:bg-amber-950/20 p-3 text-[11px] italic leading-relaxed text-muted-foreground">
-                  Lưu ý: Con số mang ý nghĩa tham khảo phong thủy giúp bạn thêm vững tin và gặp nhiều may mắn!
-                </p>
               </div>
 
               {/* Khung bên phải: Tra cứu theo Mệnh, Can Chi & Năm sinh */}
@@ -1097,7 +1325,7 @@ export default function UserDashboardPage() {
                     Tra Cứu Theo Mệnh &amp; Năm Sinh
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Chọn Ngũ Hành, nhập Can Chi và Năm sinh để nhận 2 cặp số may mắn theo ngày Âm lịch hôm nay.
+                    Chọn Ngũ Hành, nhập Năm sinh và Can Chi để nhận 2 cặp số may mắn theo ngày Âm lịch hôm nay.
                   </p>
 
                   <form onSubmit={handleFengShuiLookup} className="mt-4 space-y-3">
@@ -1118,6 +1346,34 @@ export default function UserDashboardPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-muted-foreground">Năm sinh:</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          minLength={4}
+                          maxLength={4}
+                          pattern="\d{4}"
+                          title="Vui lòng nhập đủ 4 chữ số năm sinh (VD: 1983)"
+                          required
+                          value={birthYear}
+                          onChange={(e) => {
+                            const cleaned = e.target.value.replace(/\D/g, '').slice(0, 4);
+                            setBirthYear(cleaned);
+                            if (birthYearError) setBirthYearError(null);
+                            if (cleaned.length === 4) {
+                              const autoCanChi = getCanChiFromYear(cleaned);
+                              if (autoCanChi) setCanChiInput(autoCanChi);
+                            }
+                          }}
+                          placeholder="VD: 1983"
+                          className={`w-20 rounded-lg border bg-background px-2.5 py-1.5 font-mono font-black outline-none ${
+                            birthYearError
+                              ? 'border-red-600 ring-1 ring-red-500/40'
+                              : 'focus:border-red-500'
+                          }`}
+                        />
+                      </div>
                       <div className="relative flex items-center gap-1.5">
                         <span className="font-bold text-muted-foreground">Can Chi:</span>
                         <div className="relative">
@@ -1153,6 +1409,7 @@ export default function UserDashboardPage() {
                                         if (getCanChiFromYear(birthYear) !== opt.label) {
                                           setBirthYear(String(opt.sampleYear));
                                         }
+                                        if (birthYearError) setBirthYearError(null);
                                         setCanChiDropdownOpen(false);
                                       }}
                                       className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
@@ -1177,25 +1434,6 @@ export default function UserDashboardPage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-muted-foreground">Năm sinh:</span>
-                        <input
-                          type="text"
-                          maxLength={4}
-                          required
-                          value={birthYear}
-                          onChange={(e) => {
-                            const cleaned = e.target.value.replace(/\D/g, '');
-                            setBirthYear(cleaned);
-                            if (cleaned.length === 4) {
-                              const autoCanChi = getCanChiFromYear(cleaned);
-                              if (autoCanChi) setCanChiInput(autoCanChi);
-                            }
-                          }}
-                          placeholder="VD: 1983"
-                          className="w-20 rounded-lg border bg-background px-2.5 py-1.5 font-mono font-black outline-none focus:border-red-500"
-                        />
-                      </div>
                       <button
                         type="submit"
                         className="rounded-xl bg-red-600 px-4 py-1.5 text-xs font-black text-white hover:bg-red-700"
@@ -1203,6 +1441,11 @@ export default function UserDashboardPage() {
                         Tra cứu
                       </button>
                     </div>
+                    {birthYearError && (
+                      <p className="text-[11px] font-bold text-red-600 dark:text-red-400">
+                        {birthYearError}
+                      </p>
+                    )}
                   </form>
 
                   {lookupResult && (
@@ -1232,10 +1475,6 @@ export default function UserDashboardPage() {
                     </div>
                   )}
                 </div>
-
-                <p className="mt-4 rounded-xl border border-red-500/20 bg-red-50/40 dark:bg-red-950/20 p-3 text-[11px] italic leading-relaxed text-muted-foreground">
-                  Lưu ý nhỏ: Những con số này mang ý nghĩa tham khảo theo phong thủy và tâm lý tích cực giúp bạn thêm vững tin, gặp nhiều may mắn!
-                </p>
               </div>
             </div>
           )
@@ -1251,18 +1490,18 @@ export default function UserDashboardPage() {
             />
           ) : (
             <div className="space-y-6">
-              {/* Bộ lọc chọn Miền + Chọn đài thuộc đúng Miền */}
+              {/* Bộ lọc chọn Miền (tự động tổng hợp toàn miền) + Dropdown lọc riêng từng đài */}
               <div className="flex flex-col gap-3 rounded-2xl border bg-card p-4 shadow-xs lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   {[
-                    { id: 'north', label: '1 - Miền Bắc (XSMB)' },
-                    { id: 'central', label: '2 - Miền Trung (XSMT)' },
-                    { id: 'south', label: '3 - Miền Nam (XSMN)' },
+                    { id: 'north', label: 'Miền Bắc (XSMB)' },
+                    { id: 'central', label: 'Miền Trung (XSMT)' },
+                    { id: 'south', label: 'Miền Nam (XSMN)' },
                   ].map((reg) => (
                     <button
                       key={reg.id}
                       type="button"
-                      onClick={() => setChartRegion(reg.id as typeof chartRegion)}
+                      onClick={() => handleSelectChartRegion(reg.id as typeof chartRegion)}
                       className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${chartRegion === reg.id
                         ? 'bg-red-600 text-white shadow-xs'
                         : 'bg-muted/60 hover:bg-muted text-foreground'
@@ -1274,12 +1513,15 @@ export default function UserDashboardPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-muted-foreground">Chọn theo đài phân tích:</span>
+                  <span className="text-xs font-bold text-muted-foreground">Lọc theo đài:</span>
                   <select
                     value={chartProvinceId}
                     onChange={(e) => setChartProvinceId(e.target.value)}
                     className="rounded-xl border-2 border-red-500/40 bg-background px-3 py-2 text-xs font-black outline-none"
                   >
+                    <option value="ALL">
+                      Tất cả đài {chartRegion === 'north' ? 'Miền Bắc' : chartRegion === 'central' ? 'Miền Trung' : 'Miền Nam'}
+                    </option>
                     {regionProvinces.map((p) => (
                       <option key={p.id} value={p.id}>
                         Xổ số {p.name}
@@ -1293,7 +1535,15 @@ export default function UserDashboardPage() {
               <div className="rounded-2xl border bg-card p-5 shadow-xs space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-black text-foreground">
-                    a. Phân Tích Chu Kỳ &amp; Nhịp Về ({PROVINCES.find((p) => p.id === chartProvinceId)?.name})
+                    a. Phân Tích Chu Kỳ &amp; Nhịp Về (
+                    {chartProvinceId === 'ALL'
+                      ? chartRegion === 'north'
+                        ? 'Toàn Miền Bắc - XSMB'
+                        : chartRegion === 'central'
+                        ? 'Toàn Miền Trung - XSMT'
+                        : 'Toàn Miền Nam - XSMN'
+                      : PROVINCES.find((p) => p.id === chartProvinceId)?.name}
+                    )
                   </h3>
                   <div className="flex items-center gap-1.5 text-xs">
                     <span className="text-muted-foreground font-bold">Chu kỳ:</span>
@@ -1608,21 +1858,14 @@ export default function UserDashboardPage() {
           </div>
         )}
 
-        {/* TAB 7: QUẢN TRỊ ADMIN */}
-        {activeTab === 'admin' && (
+        {/* TAB 7: QUẢN TRỊ ADMIN — Chỉ hiển thị duy nhất cho SUPER_ADMIN */}
+        {activeTab === 'admin' && isSuperAdmin && (
           <div className="space-y-6">
-            {adminMsg && (
-              <div className="rounded-xl border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/40 p-3 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                {adminMsg}
-              </div>
-            )}
-
             <div className="grid gap-6 lg:grid-cols-2">
               {/* 1. Thêm bổ sung Con số may mắn hôm nay (00:01 - 15:00) — không ghi đè đuôi GĐB */}
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  setAdminMsg(null);
                   const res = await fetch('/api/feng-shui/daily', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1630,7 +1873,7 @@ export default function UserDashboardPage() {
                   });
                   const json = await res.json();
                   if (!res.ok) {
-                    setAdminMsg(json.error || 'Không thể thêm bổ sung số.');
+                    showAdminNotice(json.error || 'Không thể thêm bổ sung số.', 'error');
                     return;
                   }
                   if (Array.isArray(json.data?.luckyPairs)) {
@@ -1639,8 +1882,17 @@ export default function UserDashboardPage() {
                   }
                   setManualLuckyPair(json.data?.manualLuckyPair || null);
                   setAdminLuckyInput('');
-                  setAdminMsg(
-                    `Đã thêm bổ sung cặp số ${json.data.manualLuckyPair}! Hiện đang hiển thị song song: ${json.data.luckyPair}`
+                  showAdminNotice(
+                    `Đã thêm bổ sung cặp số ${json.data.manualLuckyPair}! Hiện đang hiển thị song song: ${json.data.luckyPair}`,
+                    'success',
+                    'Cập nhật số Phong Thủy',
+                    {
+                      label: 'Xem Số Phong Thủy',
+                      onClick: () => {
+                        setAdminNotice(null);
+                        setActiveTab('fengshui');
+                      },
+                    }
                   );
                 }}
                 className="rounded-2xl border bg-card p-5 shadow-xs space-y-3"
@@ -1669,14 +1921,26 @@ export default function UserDashboardPage() {
                     <button
                       type="button"
                       onClick={async () => {
-                        setAdminMsg(null);
                         const res = await fetch('/api/feng-shui/daily', { method: 'DELETE' });
                         const json = await res.json();
                         if (res.ok && json.data) {
                           setDailyLuckyPairs(json.data.luckyPairs);
                           setDailyLuckyPair(json.data.luckyPair);
                           setManualLuckyPair(null);
-                          setAdminMsg(`Đã xóa số bổ sung. Hiện chỉ hiển thị đuôi G.ĐB tự động: ${json.data.luckyPair}`);
+                          showAdminNotice(
+                            `Đã xóa số bổ sung. Hiện chỉ hiển thị đuôi G.ĐB tự động: ${json.data.luckyPair}`,
+                            'success',
+                            'Đã xóa số bổ sung',
+                            {
+                              label: 'Xem Số Phong Thủy',
+                              onClick: () => {
+                                setAdminNotice(null);
+                                setActiveTab('fengshui');
+                              },
+                            }
+                          );
+                        } else {
+                          showAdminNotice(json.error || 'Không thể xóa số bổ sung.', 'error');
                         }
                       }}
                       className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
@@ -1691,7 +1955,17 @@ export default function UserDashboardPage() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  setAdminMsg(null);
+                  const currentCutoff = getEarliestValidSouthDrawDate();
+                  if (!newTicketDate || newTicketDate < currentCutoff.minDrawDate) {
+                    setMinTicketDateInfo(currentCutoff);
+                    setNewTicketDate(currentCutoff.minDrawDate);
+                    showAdminNotice(
+                      `Ngày mở thưởng đã qua giờ xổ (16:15). Hệ thống chỉ cho phép đăng vé từ ngày ${currentCutoff.minDrawDate.split('-').reverse().join('/')} trở đi.`,
+                      'error',
+                      'Ngày mở thưởng không hợp lệ'
+                    );
+                    return;
+                  }
                   const res = await fetch('/api/tickets', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1706,10 +1980,18 @@ export default function UserDashboardPage() {
                   });
                   const json = await res.json();
                   if (!res.ok) {
-                    setAdminMsg(json.error || 'Lỗi đăng vé.');
+                    showAdminNotice(json.error || 'Lỗi đăng vé.', 'error', 'Đăng vé thất bại');
                     return;
                   }
-                  setAdminMsg(`Đã đăng vé ${json.ticket.ticketNumber} (${json.ticket.province}) lên kho!`);
+                  showAdminNotice(
+                    `Đã đăng vé ${json.ticket.ticketNumber} (${json.ticket.province} · ${json.ticket.availableQty} vé) lên kho!`,
+                    'success',
+                    'Đăng vé thành công',
+                    {
+                      label: 'Xem tại Mua Vé Online',
+                      href: '/mua-ve-online',
+                    }
+                  );
                   setNewTicketNum('');
                 }}
                 className="rounded-2xl border bg-card p-5 shadow-xs space-y-3"
@@ -1719,38 +2001,113 @@ export default function UserDashboardPage() {
                   Đăng Vé Số Miền Nam Thật Lên Kho
                 </h3>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <input
-                    type="text"
-                    required
-                    value={newTicketProv}
-                    onChange={(e) => setNewTicketProv(e.target.value)}
-                    placeholder="Tên đài (VD: Đồng Nai)"
-                    className="rounded-lg border bg-background px-3 py-1.5 font-semibold"
-                  />
-                  <input
-                    type="date"
-                    required
-                    value={newTicketDate}
-                    onChange={(e) => setNewTicketDate(e.target.value)}
-                    className="rounded-lg border bg-background px-3 py-1.5 font-mono"
-                  />
-                  <input
-                    type="text"
-                    maxLength={6}
-                    required
-                    value={newTicketNum}
-                    onChange={(e) => setNewTicketNum(e.target.value.replace(/\D/g, ''))}
-                    placeholder="6 số vé (VD: 839268)"
-                    className="rounded-lg border bg-background px-3 py-1.5 font-mono font-bold"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={newTicketQty}
-                    onChange={(e) => setNewTicketQty(parseInt(e.target.value, 10) || 16)}
-                    placeholder="Số lượng (16, 160...)"
-                    className="rounded-lg border bg-background px-3 py-1.5 font-mono"
-                  />
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-muted-foreground">
+                      Ngày mở thưởng:
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      min={minTicketDateInfo.minDrawDate}
+                      value={newTicketDate}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val && val < minTicketDateInfo.minDrawDate) {
+                          setNewTicketDate(minTicketDateInfo.minDrawDate);
+                          showAdminNotice(
+                            `Đã qua giờ mở thưởng (16:15) — chỉ được chọn từ ngày ${minTicketDateInfo.minDrawDate.split('-').reverse().join('/')} trở đi.`,
+                            'error',
+                            'Ngày không hợp lệ'
+                          );
+                          return;
+                        }
+                        setNewTicketDate(val);
+                      }}
+                      className="w-full rounded-lg border bg-background px-3 py-1.5 font-mono font-bold"
+                    />
+                    {minTicketDateInfo.isPastTodayCutoff && (
+                      <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                        Đã qua 16:15 hôm nay — mặc định mở bán từ ngày mai ({minTicketDateInfo.minDrawDate.split('-').reverse().join('/')}).
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-muted-foreground">
+                      Đài mở thưởng ({scheduledSouthProvinces.length} đài):
+                    </label>
+                    <select
+                      required
+                      value={newTicketProv}
+                      onChange={(e) => setNewTicketProv(e.target.value)}
+                      className="w-full rounded-lg border bg-background px-3 py-1.5 font-bold"
+                    >
+                      {scheduledSouthProvinces.map((p) => (
+                        <option key={p.id} value={p.name}>
+                          {p.name} ({p.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="block text-[11px] font-bold text-muted-foreground">
+                      6 chữ số vé:
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      value={newTicketNum}
+                      onChange={(e) => setNewTicketNum(e.target.value.replace(/\D/g, ''))}
+                      placeholder="VD: 839268"
+                      className="w-full rounded-lg border bg-background px-3 py-1.5 font-mono font-bold"
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="block text-[11px] font-bold text-muted-foreground">
+                      Số lượng bán online:
+                    </label>
+                    <div
+                      role="radiogroup"
+                      aria-label="Số lượng bán online"
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                    >
+                      {(
+                        [
+                          { value: 16 as const, label: '16 vé' },
+                          { value: 160 as const, label: 'Cặp nguyên (160 vé)' },
+                        ]
+                      ).map((opt) => {
+                        const active = newTicketQty === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            onClick={() => setNewTicketQty(opt.value)}
+                            className={`flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-2 text-xs font-black whitespace-nowrap transition-colors ${
+                              active
+                                ? 'border-red-600 bg-red-600 text-white hover:bg-red-700 shadow-xs'
+                                : 'border-input bg-background text-foreground hover:border-red-400/60 hover:bg-muted/60'
+                            }`}
+                          >
+                            <span
+                              className={`grid size-4 shrink-0 place-items-center rounded-full border ${
+                                active
+                                  ? 'border-white bg-white text-red-600'
+                                  : 'border-muted-foreground/50 bg-transparent'
+                              }`}
+                            >
+                              {active && <Check className="size-3 stroke-[3]" />}
+                            </span>
+                            <span className={active ? 'text-white' : 'text-foreground'}>
+                              {opt.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs">
                   <label className="flex items-center gap-1.5 cursor-pointer font-bold">
@@ -1803,7 +2160,7 @@ export default function UserDashboardPage() {
                       <button
                         type="button"
                         onClick={async () => {
-                          await fetch('/api/orders', {
+                          const res = await fetch('/api/orders', {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1811,7 +2168,15 @@ export default function UserDashboardPage() {
                               safeKeepingPhotoUrl: orderPhotoDrafts[ord.id] ?? ord.safeKeepingPhotoUrl ?? '/images/ticket-sample-1.jpg',
                             }),
                           });
-                          setAdminMsg(`Đã cập nhật ảnh lưu két cho đơn ${ord.orderCode}!`);
+                          if (!res.ok) {
+                            showAdminNotice(`Không thể cập nhật ảnh lưu két cho đơn ${ord.orderCode}.`, 'error');
+                            return;
+                          }
+                          showAdminNotice(
+                            `Đã cập nhật ảnh lưu két cho đơn ${ord.orderCode}!`,
+                            'success',
+                            'Lưu ảnh thành công'
+                          );
                         }}
                         className="rounded-lg bg-slate-800 px-2.5 py-1 font-bold text-white"
                       >
@@ -1820,7 +2185,7 @@ export default function UserDashboardPage() {
                       <button
                         type="button"
                         onClick={async () => {
-                          await fetch('/api/orders', {
+                          const res = await fetch('/api/orders', {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1829,10 +2194,18 @@ export default function UserDashboardPage() {
                               wonPrizeDetail: 'Chúc mừng trúng thưởng! Liên hệ Minh Luân để nhận giải.',
                             }),
                           });
+                          if (!res.ok) {
+                            showAdminNotice(`Không thể cập nhật trạng thái trúng thưởng cho đơn ${ord.orderCode}.`, 'error');
+                            return;
+                          }
                           setAdminOrders((prev) =>
                             prev.map((x) => (x.id === ord.id ? { ...x, prizeStatus: 'WON' } : x))
                           );
-                          setAdminMsg(`Đã đánh dấu TRÚNG THƯỞNG cho đơn ${ord.orderCode}!`);
+                          showAdminNotice(
+                            `Đã đánh dấu TRÚNG THƯỞNG cho đơn ${ord.orderCode}!`,
+                            'success',
+                            'Cập nhật trúng thưởng'
+                          );
                         }}
                         className="rounded-lg bg-emerald-600 px-2.5 py-1 font-bold text-white"
                       >
@@ -1841,6 +2214,97 @@ export default function UserDashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Popup Thông Báo Quản Trị (hiển thị giữa màn hình kèm nút điều hướng nhanh) */}
+        {adminNotice && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-notice-title"
+            onClick={() => setAdminNotice(null)}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-xs animate-in fade-in duration-150"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`relative w-full max-w-md rounded-3xl border-2 bg-card p-6 text-center shadow-2xl animate-in zoom-in-95 duration-150 ${
+                adminNotice.type === 'error'
+                  ? 'border-red-500/60'
+                  : 'border-emerald-500/60'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setAdminNotice(null)}
+                aria-label="Đóng thông báo"
+                className="absolute right-4 top-4 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <X className="size-4" />
+              </button>
+
+              <div
+                className={`mx-auto grid size-14 place-items-center rounded-2xl ${
+                  adminNotice.type === 'error'
+                    ? 'bg-red-600/15 text-red-600 dark:text-red-400'
+                    : 'bg-emerald-600/15 text-emerald-600 dark:text-emerald-400'
+                }`}
+              >
+                {adminNotice.type === 'error' ? (
+                  <AlertTriangle className="size-7" />
+                ) : (
+                  <CheckCircle2 className="size-7" />
+                )}
+              </div>
+
+              <h3
+                id="admin-notice-title"
+                className={`mt-4 text-base font-black uppercase tracking-wide ${
+                  adminNotice.type === 'error'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-emerald-700 dark:text-emerald-400'
+                }`}
+              >
+                {adminNotice.title}
+              </h3>
+
+              <p className="mt-2 text-xs sm:text-sm font-semibold leading-relaxed text-foreground">
+                {adminNotice.message}
+              </p>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+                {adminNotice.action &&
+                  (adminNotice.action.href ? (
+                    <Link
+                      href={adminNotice.action.href}
+                      onClick={() => setAdminNotice(null)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white shadow-sm hover:bg-red-700 transition-colors"
+                    >
+                      {adminNotice.action.label} <ArrowRight className="size-3.5" />
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={adminNotice.action.onClick}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white shadow-sm hover:bg-red-700 transition-colors"
+                    >
+                      {adminNotice.action.label} <ArrowRight className="size-3.5" />
+                    </button>
+                  ))}
+
+                <button
+                  type="button"
+                  onClick={() => setAdminNotice(null)}
+                  className={`rounded-xl px-5 py-2.5 text-xs font-black transition-colors ${
+                    adminNotice.action
+                      ? 'border bg-background text-foreground hover:bg-muted'
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
+                >
+                  Đóng
+                </button>
               </div>
             </div>
           </div>

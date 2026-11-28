@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
+import { getSessionUser, isSuperAdminUser } from '@/lib/auth';
 import { fetchLotteryResultsByDate } from '@/lib/services/xosoApi';
 
 function getVietnamDateParts(d = new Date()) {
@@ -114,6 +115,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const sessionUser = await getSessionUser();
+    if (!isSuperAdminUser(sessionUser)) {
+      return NextResponse.json(
+        { error: 'Chỉ tài khoản Quản Trị Hệ Thống (SUPER_ADMIN) mới có quyền thêm số thủ công.' },
+        { status: 403 }
+      );
+    }
+
     const vn = getVietnamDateParts();
     const minutesOfDay = vn.hour * 60 + vn.minute;
     // Khung giờ 00:01 đến 15:00 (1 -> 900 phút)
@@ -178,6 +187,14 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
   try {
+    const sessionUser = await getSessionUser();
+    if (!isSuperAdminUser(sessionUser)) {
+      return NextResponse.json(
+        { error: 'Chỉ tài khoản Quản Trị Hệ Thống (SUPER_ADMIN) mới có quyền xóa số bổ sung.' },
+        { status: 403 }
+      );
+    }
+
     const vn = getVietnamDateParts();
     const autoLuckyPair = await extractLatestXsmbSpecialLast2(vn.isoDate);
 

@@ -38,7 +38,6 @@ export default function MuaVeOnlinePage() {
 
   const [selectedDayTab, setSelectedDayTab] = useState<'today' | 'tomorrow'>('today');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [qtyDrafts, setQtyDrafts] = useState<Record<string, number>>({});
   const [cart, setCart] = useState<{ ticket: DbTicket; quantity: number }[]>([]);
   const [showCheckoutModal, setShowCheckoutModal] = useState<boolean>(false);
   const [deliveryMethod, setDeliveryMethod] = useState<'SAFE_KEEPING' | 'EXPRESS_9KM'>('SAFE_KEEPING');
@@ -87,28 +86,20 @@ export default function MuaVeOnlinePage() {
     });
   }, [tickets, selectedDayTab, todayIso, tomorrowIso, searchQuery]);
 
-  const getDraftQty = (ticket: DbTicket) => {
-    const val = qtyDrafts[ticket.id] ?? 1;
-    return Math.min(Math.max(1, val), Math.max(1, ticket.availableQty));
-  };
+  const formatTicketQtyLabel = (qty: number) =>
+    qty >= 160 ? `Cặp nguyên (${qty} vé)` : `${qty} vé`;
 
-  const setDraftQty = (ticketId: string, qty: number, maxQty: number) => {
-    const safe = Math.min(Math.max(1, qty), Math.max(1, maxQty));
-    setQtyDrafts((prev) => ({ ...prev, [ticketId]: safe }));
-  };
-
-  const addToCart = (ticket: DbTicket, overrideQty?: number) => {
-    const qtyToAdd = overrideQty ?? getDraftQty(ticket);
+  const addToCart = (ticket: DbTicket) => {
+    const fixedQty = ticket.availableQty;
+    if (fixedQty <= 0) return;
     setCart((prev) => {
       const existing = prev.find((item) => item.ticket.id === ticket.id);
       if (existing) {
         return prev.map((item) =>
-          item.ticket.id === ticket.id
-            ? { ...item, quantity: Math.min(ticket.availableQty, qtyToAdd) }
-            : item
+          item.ticket.id === ticket.id ? { ...item, quantity: fixedQty } : item
         );
       }
-      return [...prev, { ticket, quantity: Math.min(ticket.availableQty, qtyToAdd) }];
+      return [...prev, { ticket, quantity: fixedQty }];
     });
   };
 
@@ -291,7 +282,8 @@ export default function MuaVeOnlinePage() {
             {filteredTickets.map((ticket) => {
               const inCart = cart.find((item) => item.ticket.id === ticket.id);
               const isSoldOut = ticket.availableQty <= 0 || ticket.status === 'SOLD_OUT';
-              const draftQty = getDraftQty(ticket);
+              const fixedQty = ticket.availableQty;
+              const bundleTotal = fixedQty * ticket.pricePerTicket;
 
               return (
                 <div
@@ -333,58 +325,27 @@ export default function MuaVeOnlinePage() {
                     </div>
                   </div>
 
-                  {/* Thông Tin & Chọn Số Lượng */}
+                  {/* Thông Tin Vé (Số lượng cố định theo cấu hình Admin) */}
                   <div className="flex flex-1 flex-col justify-between p-4">
-                    <div className="space-y-2.5">
+                    <div className="space-y-2">
                       <div className="flex items-baseline justify-between">
                         <div className="text-xs text-muted-foreground">Giá vé:</div>
-                        <div className="text-base font-black text-red-600 dark:text-red-400">
-                          {ticket.pricePerTicket.toLocaleString('vi-VN')} đ
+                        <div className="text-sm font-black text-foreground">
+                          {ticket.pricePerTicket.toLocaleString('vi-VN')} đ/vé
                         </div>
                       </div>
 
-                      {/* 2 nút chọn nhanh 16 vé / Cặp nguyên 160 vé + nhập lẻ */}
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] font-bold text-muted-foreground">Chọn nhanh số lượng:</div>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          <button
-                            type="button"
-                            disabled={isSoldOut || ticket.availableQty < 16}
-                            onClick={() => setDraftQty(ticket.id, 16, ticket.availableQty)}
-                            className={`rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
-                              draftQty === 16
-                                ? 'border-red-600 bg-red-50 text-red-600 dark:bg-red-950/40'
-                                : 'hover:bg-muted disabled:opacity-40'
-                            }`}
-                          >
-                            Loại: 16 vé
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isSoldOut || ticket.availableQty < 160}
-                            onClick={() => setDraftQty(ticket.id, 160, ticket.availableQty)}
-                            className={`rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
-                              draftQty === 160
-                                ? 'border-red-600 bg-red-50 text-red-600 dark:bg-red-950/40'
-                                : 'hover:bg-muted disabled:opacity-40'
-                            }`}
-                          >
-                            Cặp nguyên (160 vé)
-                          </button>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 text-[11px]">
-                          <span className="text-muted-foreground">Số lượng lẻ:</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={Math.max(1, ticket.availableQty)}
-                            disabled={isSoldOut}
-                            value={draftQty}
-                            onChange={(e) =>
-                              setDraftQty(ticket.id, parseInt(e.target.value, 10) || 1, ticket.availableQty)
-                            }
-                            className="w-20 rounded-lg border bg-background px-2 py-1 text-center font-mono font-bold outline-none focus:border-red-500"
-                          />
+                      <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-2.5 py-1.5 text-xs">
+                        <span className="font-bold text-muted-foreground">Số lượng:</span>
+                        <span className="font-black text-foreground">
+                          {formatTicketQtyLabel(fixedQty)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline justify-between pt-0.5">
+                        <div className="text-xs font-bold text-muted-foreground">Tổng tiền:</div>
+                        <div className="text-base font-black text-red-600 dark:text-red-400">
+                          {bundleTotal.toLocaleString('vi-VN')} đ
                         </div>
                       </div>
                     </div>
@@ -410,7 +371,7 @@ export default function MuaVeOnlinePage() {
                           </>
                         ) : (
                           <>
-                            <ShoppingBag className="size-4" /> Chọn Mua ({draftQty} vé)
+                            <ShoppingBag className="size-4" /> Chọn Mua ({fixedQty} vé)
                           </>
                         )}
                       </button>

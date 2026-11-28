@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getVietnamClock } from '@/lib/draw-schedule-status';
 import {
   fetchLotteryResultsByDate,
   fetchProvinceDrawHistory,
@@ -54,9 +55,17 @@ export async function GET(request: NextRequest) {
     }
 
     const envelope = await fetchLotteryResultsByDate(targetDate);
+    const todayIso = getVietnamClock().isoDate;
+    const isFinalizedPast =
+      !envelope.isLiveWindow &&
+      Boolean(envelope.resolvedDate && envelope.resolvedDate < todayIso) &&
+      !envelope.isFallbackToLatestAvailable;
+
     const cacheHeader = envelope.isLiveWindow
       ? `public, s-maxage=${envelope.revalidateSeconds}, stale-while-revalidate=5`
-      : `public, s-maxage=${envelope.revalidateSeconds}, stale-while-revalidate=60`;
+      : isFinalizedPast
+      ? 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
+      : `public, max-age=300, s-maxage=${envelope.revalidateSeconds}, stale-while-revalidate=3600`;
     return NextResponse.json(envelope, {
       status: 200,
       headers: {
