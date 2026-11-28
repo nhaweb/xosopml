@@ -38,6 +38,13 @@ function LoginFormContent() {
         setError(json.error || 'Đăng nhập thất bại.');
         return;
       }
+      if (json.user) {
+        try {
+          sessionStorage.setItem('minhluan_auth_user_v1', JSON.stringify(json.user));
+        } catch {
+          // ignore
+        }
+      }
       router.push('/dashboard');
       router.refresh();
     } catch {

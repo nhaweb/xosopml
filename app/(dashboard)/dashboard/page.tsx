@@ -314,8 +314,36 @@ function computeRegionLoGan(region: 'north' | 'central' | 'south') {
   return Array.from(byNumber.values()).sort((a, b) => b.daysUnopened - a.daysUnopened);
 }
 
+const AUTH_USER_CACHE_KEY = 'minhluan_auth_user_v1';
+
+function readCachedAuthUser(): UserProfile | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(AUTH_USER_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as UserProfile;
+    return parsed?.id ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedAuthUser(profile: UserProfile | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (profile) {
+      sessionStorage.setItem(AUTH_USER_CACHE_KEY, JSON.stringify(profile));
+    } else {
+      sessionStorage.removeItem(AUTH_USER_CACHE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export default function UserDashboardPage() {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [activeTier, setActiveTier] = useState<'free' | 'vip'>('free');
   const [activeTab, setActiveTab] = useState<
     'history' | 'favorites' | 'fengshui' | 'charts' | 'ai_chat' | 'upgrade' | 'admin'
@@ -327,6 +355,7 @@ export default function UserDashboardPage() {
   const [editPhone, setEditPhone] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const [phoneVerifyOpen, setPhoneVerifyOpen] = useState(false);
   const [otpPhone, setOtpPhone] = useState('');
@@ -492,47 +521,89 @@ export default function UserDashboardPage() {
   const [chatInput, setChatInput] = useState('');
   const [usedMessagesToday, setUsedMessagesToday] = useState(0);
 
-  const loadUserAndOrders = useCallback(async () => {
-    try {
-      const [meRes, ordersRes, fsRes] = await Promise.all([
-        fetch('/api/auth/me'),
-        fetch('/api/orders'),
-        fetch('/api/feng-shui/daily'),
-      ]);
-      if (meRes.ok) {
-        const meJson = await meRes.json();
-        if (meJson.user) {
-          setUser(meJson.user);
-          setActiveTier(meJson.user.vipTier === 'VIP' ? 'vip' : 'free');
-          setEditFullName(meJson.user.fullName || '');
-          setEditPhone(meJson.user.phoneNumber || '');
-          setEditAvatarUrl(meJson.user.avatarUrl || '');
-          setOtpPhone(meJson.user.phoneNumber || '');
-        }
-      }
-      if (ordersRes.ok) {
-        const ordJson = await ordersRes.json();
-        setOrders(ordJson.orders || []);
-      }
-      if (fsRes.ok) {
-        const fsJson = await fsRes.json();
-        if (Array.isArray(fsJson.luckyPairs) && fsJson.luckyPairs.length > 0) {
-          setDailyLuckyPairs(fsJson.luckyPairs);
-          setDailyLuckyPair(fsJson.luckyPairs.join(', '));
-        } else if (fsJson.luckyPair) {
-          setDailyLuckyPairs([fsJson.luckyPair]);
-          setDailyLuckyPair(fsJson.luckyPair);
-        }
-        if (fsJson.autoLuckyPair) setAutoLuckyPair(fsJson.autoLuckyPair);
-        setManualLuckyPair(fsJson.manualLuckyPair || null);
-        if (fsJson.nextUpdateDate) {
-          setNextUpdateDate(fsJson.nextUpdateDate.split('-').reverse().join('/'));
-        }
-      }
-    } catch {
-      // ignore
-    }
+  const applyAuthenticatedUser = useCallback((profile: UserProfile) => {
+    setUser(profile);
+    setActiveTier(profile.vipTier === 'VIP' ? 'vip' : 'free');
+    setEditFullName(profile.fullName || '');
+    setEditPhone(profile.phoneNumber || '');
+    setEditAvatarUrl(profile.avatarUrl || '');
+    setOtpPhone(profile.phoneNumber || '');
+    writeCachedAuthUser(profile);
   }, []);
+
+  const loadUserAndOrders = useCallback(async () => {
+    // Hiển thị tức thì phiên đăng nhập từ sessionStorage khi quay lại Dashboard (không nháy về Khách)
+    const cachedUser = readCachedAuthUser();
+    if (cachedUser) {
+      applyAuthenticatedUser(cachedUser);
+      setAuthChecking(false);
+    }
+
+    // Tách riêng 3 request độc lập để /api/auth/me luôn phản hồi tức thì,
+    // không bị chặn bởi /api/orders hay /api/feng-shui/daily
+    const loadMe = (async () => {
+      try {
+        const meRes = await fetch('/api/auth/me', {
+          cache: 'no-store',
+          credentials: 'include',
+        });
+        if (meRes.ok) {
+          const meJson = await meRes.json();
+          if (meJson.user) {
+            applyAuthenticatedUser(meJson.user);
+          } else {
+            setUser(null);
+            setActiveTier('free');
+            writeCachedAuthUser(null);
+          }
+        }
+      } catch {
+        // Giữ phiên hiện có nếu mạng chập chờn tạm thời
+      } finally {
+        setAuthChecking(false);
+      }
+    })();
+
+    const loadOrders = (async () => {
+      try {
+        const ordersRes = await fetch('/api/orders', {
+          cache: 'no-store',
+          credentials: 'include',
+        });
+        if (ordersRes.ok) {
+          const ordJson = await ordersRes.json();
+          setOrders(ordJson.orders || []);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+
+    const loadFengShui = (async () => {
+      try {
+        const fsRes = await fetch('/api/feng-shui/daily');
+        if (fsRes.ok) {
+          const fsJson = await fsRes.json();
+          if (Array.isArray(fsJson.luckyPairs) && fsJson.luckyPairs.length > 0) {
+            setDailyLuckyPairs(fsJson.luckyPairs);
+            setDailyLuckyPair(fsJson.luckyPairs.join(', '));
+          } else if (fsJson.luckyPair) {
+            setDailyLuckyPairs([fsJson.luckyPair]);
+            setDailyLuckyPair(fsJson.luckyPair);
+          }
+          if (fsJson.autoLuckyPair) setAutoLuckyPair(fsJson.autoLuckyPair);
+          setManualLuckyPair(fsJson.manualLuckyPair || null);
+          if (fsJson.nextUpdateDate) {
+            setNextUpdateDate(fsJson.nextUpdateDate.split('-').reverse().join('/'));
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
+
+    await Promise.all([loadMe, loadOrders, loadFengShui]);
+  }, [applyAuthenticatedUser]);
 
   useEffect(() => {
     loadUserAndOrders();
@@ -697,38 +768,81 @@ export default function UserDashboardPage() {
     setNewFavNote('');
   };
 
+  // Tự động nén & resize ảnh đại diện về 256x256 (chỉ ~15KB thay vì nhiều MB) để lưu cực nhanh
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setProfileMsg(null);
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setEditAvatarUrl(reader.result);
-      }
+      if (typeof reader.result !== 'string') return;
+      const img = new Image();
+      img.onload = () => {
+        const MAX_SIZE = 256;
+        const scale = Math.min(1, MAX_SIZE / Math.max(img.width || 1, img.height || 1));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/webp', 0.82);
+          setEditAvatarUrl(
+            compressed.startsWith('data:image/webp')
+              ? compressed
+              : canvas.toDataURL('image/jpeg', 0.82)
+          );
+        } else {
+          setEditAvatarUrl(reader.result as string);
+        }
+      };
+      img.onerror = () => {
+        setEditAvatarUrl(reader.result as string);
+      };
+      img.src = reader.result;
     };
     reader.readAsDataURL(file);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingProfile) return;
     setProfileMsg(null);
-    const res = await fetch('/api/auth/me', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    setSavingProfile(true);
+    try {
+      const payload: { fullName: string; phoneNumber: string; avatarUrl?: string } = {
         fullName: editFullName,
         phoneNumber: editPhone,
-        avatarUrl: editAvatarUrl,
-      }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setProfileMsg(json.error || 'Không thể cập nhật thông tin.');
-      return;
+      };
+      // Chỉ gửi avatarUrl khi người dùng thực sự thay đổi ảnh để giảm kích thước request
+      if (editAvatarUrl !== (user?.avatarUrl || '')) {
+        payload.avatarUrl = editAvatarUrl;
+      }
+
+      const res = await fetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setProfileMsg(json.error || 'Không thể cập nhật thông tin.');
+        return;
+      }
+      applyAuthenticatedUser(json.user);
+      setProfileModalOpen(false);
+      showAdminNotice(
+        'Thông tin hồ sơ (ảnh đại diện, tên hiển thị và số điện thoại) đã được lưu thành công!',
+        'success',
+        'Cập nhật thông tin thành công'
+      );
+    } catch {
+      setProfileMsg('Lỗi kết nối máy chủ. Vui lòng thử lại.');
+    } finally {
+      setSavingProfile(false);
     }
-    setUser(json.user);
-    setProfileMsg('Đã lưu thông tin tài khoản vào Neon DB!');
-    setTimeout(() => setProfileModalOpen(false), 700);
   };
 
   const handleSendOtp = async () => {
@@ -760,9 +874,15 @@ export default function UserDashboardPage() {
       setOtpMessage(json.error || 'Mã OTP không hợp lệ.');
       return;
     }
-    setUser(json.user);
-    setOtpMessage('Đã xác thực số điện thoại thành công!');
-    setTimeout(() => setPhoneVerifyOpen(false), 800);
+    applyAuthenticatedUser(json.user);
+    setPhoneVerifyOpen(false);
+    setOtpSent(false);
+    setOtpCode('');
+    showAdminNotice(
+      `Số điện thoại ${json.user?.phoneNumber || otpPhone} đã được xác thực thành công!`,
+      'success',
+      'Xác thực SĐT thành công'
+    );
   };
 
   const handleFengShuiLookup = (e: React.FormEvent) => {
@@ -814,7 +934,8 @@ export default function UserDashboardPage() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    writeCachedAuthUser(null);
     setUser(null);
     setActiveTier('free');
     setOrders([]);
@@ -918,7 +1039,7 @@ export default function UserDashboardPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">
-                    {user ? user.fullName : 'Tài khoản Khách'}
+                    {user ? user.fullName : authChecking ? 'Đang tải tài khoản...' : 'Tài khoản Khách'}
                   </h1>
                   {activeTier === 'vip' && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#b80c0c] to-amber-500 px-3 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white shadow-xs">
@@ -949,7 +1070,9 @@ export default function UserDashboardPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {!user ? (
+              {authChecking ? (
+                <div className="h-9 w-28 animate-pulse rounded-xl bg-muted/60" />
+              ) : !user ? (
                 <>
                   <Link
                     href="/login"
@@ -1280,9 +1403,6 @@ export default function UserDashboardPage() {
                   <h2 className="mt-2 text-xl font-black text-foreground">
                     Con Số Phong Thuỷ Hôm Nay Của Bạn?
                   </h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Chọn cung mệnh Ngũ Hành và năm sinh để hệ thống luận giải con số đại cát trong ngày hôm nay.
-                  </p>
 
                   {/* Hiển thị cặp số may mắn (tự động + bổ sung nếu có) */}
                   <div className="mt-5 rounded-2xl border bg-background p-6 text-center shadow-2xs">
@@ -2226,7 +2346,7 @@ export default function UserDashboardPage() {
             aria-modal="true"
             aria-labelledby="admin-notice-title"
             onClick={() => setAdminNotice(null)}
-            className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-xs animate-in fade-in duration-150"
+            className="fixed inset-0 z-[60] grid place-items-center bg-black/55 p-4 backdrop-blur-xs animate-in fade-in duration-150"
           >
             <div
               onClick={(e) => e.stopPropagation()}
@@ -2315,7 +2435,11 @@ export default function UserDashboardPage() {
           <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-xs">
             <form onSubmit={handleSaveProfile} className="relative w-full max-w-md rounded-3xl border bg-card p-6 shadow-2xl space-y-4">
               <h3 className="text-lg font-black text-foreground">Cập Nhật Thông Tin Tài Khoản</h3>
-              {profileMsg && <div className="text-xs font-bold text-emerald-600">{profileMsg}</div>}
+              {profileMsg && (
+                <div className="rounded-xl border border-red-500/40 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400">
+                  {profileMsg}
+                </div>
+              )}
               <div className="flex items-center gap-3">
                 <img
                   src={editAvatarUrl || '/favicon-logo.png'}
@@ -2349,13 +2473,18 @@ export default function UserDashboardPage() {
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
+                  disabled={savingProfile}
                   onClick={() => setProfileModalOpen(false)}
-                  className="rounded-xl border px-4 py-2 text-xs font-bold"
+                  className="rounded-xl border px-4 py-2 text-xs font-bold disabled:opacity-50"
                 >
                   Hủy
                 </button>
-                <button type="submit" className="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white">
-                  Lưu Thay Đổi
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700 disabled:opacity-60"
+                >
+                  {savingProfile ? 'Đang lưu...' : 'Lưu Thay Đổi'}
                 </button>
               </div>
             </form>
