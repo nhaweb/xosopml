@@ -63,11 +63,15 @@ export function verifySessionToken(token: string): SessionPayload | null {
   }
 }
 
-export async function getSessionUser() {
+export async function getSessionPayload(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
-  const payload = verifySessionToken(token);
+  return verifySessionToken(token);
+}
+
+export async function getSessionUser() {
+  const payload = await getSessionPayload();
   if (!payload) return null;
 
   const [user] = await db
