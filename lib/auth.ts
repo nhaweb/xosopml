@@ -79,6 +79,23 @@ export async function getSessionUser() {
   return user || null;
 }
 
+const DEFAULT_SUPER_ADMIN_EMAILS = [
+  'admin@xosominhluan.vn',
+  'superadmin@xosominhluan.vn',
+  'support@xosominhluan.vn',
+];
+
+export function isSuperAdminUser(user: { role?: string | null; email?: string | null } | null): boolean {
+  if (!user) return false;
+  if (user.role === 'SUPER_ADMIN') return true;
+  const envEmails = (process.env.SUPER_ADMIN_EMAILS || process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const allowed = new Set([...DEFAULT_SUPER_ADMIN_EMAILS, ...envEmails]);
+  return Boolean(user.email && allowed.has(user.email.trim().toLowerCase()));
+}
+
 export async function generateNextMemberCode(): Promise<string> {
   const seqRes = await db.execute(sql`SELECT nextval('member_code_seq') AS val`);
   const rawVal = Number((seqRes.rows?.[0] as { val?: string | number })?.val || 1);

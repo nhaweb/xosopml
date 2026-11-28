@@ -5,6 +5,7 @@ import { SiteFrame } from '@/components/site/site-frame';
 import { RegionLotteryBoard } from '@/components/lottery/region-lottery-board';
 import { VietlottKenoWidget } from '@/components/lottery/vietlott-keno-widget';
 import { ApiDataSourceBanner } from '@/components/lottery/lottery-board-skeleton';
+import { getRegionDrawStatus } from '@/lib/draw-schedule-status';
 import { fetchLotteryResultsByDate } from '@/lib/services/xosoApi';
 
 export const dynamic = 'force-dynamic';
@@ -122,6 +123,7 @@ export default async function KetQuaXoSoByRegionPage({ params }: PageProps) {
   const todayResults = todayEnv.data[meta.key];
   const prevResults = prevEnv.data[meta.key];
   const sameDateFallback = todayEnv.data.formattedDate === prevEnv.data.formattedDate;
+  const isRegionLive = getRegionDrawStatus(meta.key, todayVn) === 'live';
 
   return (
     <SiteFrame>
@@ -163,14 +165,19 @@ export default async function KetQuaXoSoByRegionPage({ params }: PageProps) {
       <div className="space-y-8">
         <RegionLotteryBoard
           id={meta.boardId}
-          title={`KẾT QUẢ XỔ SỐ ${meta.name.toUpperCase()} - ${todayEnv.data.formattedDate}`}
+          title={
+            isRegionLive
+              ? `TRỰC TIẾP XỔ SỐ ${meta.name.toUpperCase()} - ${todayEnv.data.formattedDate}`
+              : `KẾT QUẢ XỔ SỐ ${meta.name.toUpperCase()} - ${todayEnv.data.formattedDate}`
+          }
           regionCode={meta.regionCode}
           drawTime={meta.drawTime}
           dateStr={todayEnv.data.formattedDate}
           results={todayResults}
+          isLive={isRegionLive}
         />
 
-        {!sameDateFallback && prevResults.length > 0 && (
+        {!isRegionLive && !sameDateFallback && prevResults.length > 0 && (
           <RegionLotteryBoard
             id={`${meta.boardId}-yesterday`}
             title={`${meta.shortCode} Hôm Qua — ${prevEnv.data.formattedDate}`}

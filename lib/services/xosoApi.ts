@@ -1,6 +1,12 @@
 import { PROVINCES, getProvincesByDay, sortProvincesCanonical } from '@/config/lottery-provinces';
+import { getRegionDrawStatus, getVietnamClock } from '@/lib/draw-schedule-status';
 import { getFallbackLotteryResults } from '@/lib/fallback-lottery-data';
 import { formatDate } from '@/lib/format';
+import {
+  getCachedDayDrawsFromDb,
+  isRegionDrawFinalized,
+  saveRegionDrawsToDb,
+} from '@/lib/services/lotteryCacheDb';
 import { calculateLoGan } from '@/lib/stats-calculator';
 import {
   DayLotteryData,
@@ -128,8 +134,9 @@ export interface XoSoServiceEnvelope<T> {
 // 2. CẤU HÌNH CACHING THÔNG MINH THEO KHUNG GIỜ QUAY THƯỞNG (16h05 - 18h45)
 // ============================================================================
 
-const LIVE_CACHE_SECONDS = 10;
+const LIVE_CACHE_SECONDS = 15;
 const NORMAL_CACHE_SECONDS = 3600;
+const PAST_DATE_CACHE_SECONDS = 86400; // 24 giờ cho ngày quá khứ đã chốt kết quả
 
 interface MemoryCacheEntry<T> {
   expiresAt: number;
@@ -137,6 +144,7 @@ interface MemoryCacheEntry<T> {
 }
 
 const memoryCache = new Map<string, MemoryCacheEntry<unknown>>();
+const inFlightDayRequests = new Map<string, Promise<XoSoServiceEnvelope<DayLotteryData>>>();
 
 export function isWithinLiveDrawWindow(now: Date = new Date()): boolean {
   const utcMs = now.getTime() + now.getTimezoneOffset() * 60_000;
@@ -158,7 +166,7 @@ export function getSmartRevalidateSeconds(targetDate?: Date): {
     };
   }
 
-  const todayIso = toIsoDateString(new Date());
+  const todayIso = getVietnamClock().isoDate;
   const targetIso = toIsoDateString(targetDate);
   const isTodayTarget = todayIso === targetIso;
 
@@ -654,6 +662,17 @@ function buildPendingProvinceDraw(province: ProvinceInfo, compactDateKey: string
   };
 }
 
+function filterDrawsBySchedule(
+  draws: ProvinceDrawResult[],
+  region: Region,
+  date: Date
+): ProvinceDrawResult[] {
+  const scheduled = getProvincesByDay(date.getDay(), region);
+  if (scheduled.length === 0) return draws;
+  const allowedIds = new Set(scheduled.map((s) => s.id));
+  return draws.filter((d) => allowedIds.has(d.provinceId));
+}
+
 function ensureScheduledLiveProvinces(
   draws: ProvinceDrawResult[],
   region: Region,
@@ -663,15 +682,10 @@ function ensureScheduledLiveProvinces(
   const scheduled = getProvincesByDay(date.getDay(), region);
   if (scheduled.length === 0) return draws;
   const byId = new Map(draws.map((d) => [d.provinceId, d]));
+  // Chỉ giữ đúng các đài mở thưởng theo lịch của ngày hôm đó (tuyệt đối không gộp đài ngày cũ)
   const merged = scheduled.map(
     (prov) => byId.get(prov.id) || buildPendingProvinceDraw(prov, compactDateKey)
   );
-  // Giữ thêm đài ngoài lịch (nếu API trả về)
-  for (const d of draws) {
-    if (!scheduled.some((s) => s.id === d.provinceId)) {
-      merged.push(d);
-    }
-  }
   return sortProvincesCanonical(merged);
 }
 
@@ -679,119 +693,246 @@ export async function fetchLotteryResultsByDate(
   date: Date = new Date()
 ): Promise<XoSoServiceEnvelope<DayLotteryData>> {
   const isoDate = toIsoDateString(date);
-  const compactKey = toCompactDateKey(date);
-  const cacheKey = `draws_day_v2_${isoDate}`;
-  const { isLiveWindow, revalidateSeconds } = getSmartRevalidateSeconds(date);
+  const cacheKey = `draws_day_v4_${isoDate}`;
 
   const cached = memoryCache.get(cacheKey) as MemoryCacheEntry<DayLotteryData> | undefined;
   if (cached && cached.expiresAt > Date.now()) {
     return cached.envelope;
   }
 
-  let south: ProvinceDrawResult[] = [];
-  let central: ProvinceDrawResult[] = [];
-  let north: ProvinceDrawResult[] = [];
+  // Gộp các request trùng thời điểm cho cùng 1 ngày (In-Flight Deduplication)
+  const existingInFlight = inFlightDayRequests.get(cacheKey);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
+  const job = loadLotteryResultsByDateInternal(date, isoDate, cacheKey).finally(() => {
+    inFlightDayRequests.delete(cacheKey);
+  });
+  inFlightDayRequests.set(cacheKey, job);
+  return job;
+}
+
+async function loadLotteryResultsByDateInternal(
+  date: Date,
+  isoDate: string,
+  cacheKey: string
+): Promise<XoSoServiceEnvelope<DayLotteryData>> {
+  const compactKey = toCompactDateKey(date);
+  const { isLiveWindow, revalidateSeconds } = getSmartRevalidateSeconds(date);
+
+  const now = new Date();
+  const todayIso = getVietnamClock(now).isoDate;
+  const isTodayTarget = isoDate === todayIso;
+  const isPastTarget = isoDate < todayIso;
+  const isFutureTarget = isoDate > todayIso;
+
+  const southPhase = isTodayTarget ? getRegionDrawStatus('south', date, now) : isPastTarget ? 'done' : 'waiting';
+  const centralPhase = isTodayTarget ? getRegionDrawStatus('central', date, now) : isPastTarget ? 'done' : 'waiting';
+  const northPhase = isTodayTarget ? getRegionDrawStatus('north', date, now) : isPastTarget ? 'done' : 'waiting';
+
+  const isMnLive = isTodayTarget && southPhase === 'live';
+  const isMtLive = isTodayTarget && centralPhase === 'live';
+  const isMbLive = isTodayTarget && northPhase === 'live';
+  const hasAnyLiveRegion = isMnLive || isMtLive || isMbLive;
+
+  // TẦNG 1: Đọc dữ liệu đã lưu bền vững trong PostgreSQL (tránh gọi xosoapi.online cho ngày cũ / miền đã xổ xong)
+  const dbCached = !isFutureTarget ? await getCachedDayDrawsFromDb(isoDate) : {};
+
+  let south: ProvinceDrawResult[] = dbCached.south?.results ?? [];
+  let central: ProvinceDrawResult[] = dbCached.central?.results ?? [];
+  let north: ProvinceDrawResult[] = dbCached.north?.results ?? [];
+
+  const southFinalizedInDb = Boolean(dbCached.south?.isComplete);
+  const centralFinalizedInDb = Boolean(dbCached.central?.isComplete);
+  const northFinalizedInDb = Boolean(dbCached.north?.isComplete);
+
+  // Chỉ gọi API ngoài cho những miền THỰC SỰ cần:
+  // - Không bao giờ gọi API cho ngày tương lai hoặc miền đang ở trạng thái 'waiting' / 'upcoming' (chưa tới giờ quay)
+  // - Không bao giờ gọi lại API cho miền đã chốt đủ giải và lưu trong PostgreSQL
+  const needFetchSouth =
+    !isFutureTarget && !southFinalizedInDb && (isPastTarget || southPhase === 'live' || southPhase === 'done');
+  const needFetchCentral =
+    !isFutureTarget && !centralFinalizedInDb && (isPastTarget || centralPhase === 'live' || centralPhase === 'done');
+  const needFetchNorth =
+    !isFutureTarget && !northFinalizedInDb && (isPastTarget || northPhase === 'live' || northPhase === 'done');
+
   let lastWarning: string | undefined;
+  let fetchedSouthFromApi = false;
+  let fetchedCentralFromApi = false;
+  let fetchedNorthFromApi = false;
 
   const [mnRes, mtRes, mbRes] = await Promise.all([
-    requestXoSoApi<XoSoApiVietnamDrawsResponse>(
-      `/api/v1/vietnam/draws?date=${isoDate}&region=MN&limit=10`,
-      revalidateSeconds
-    ),
-    requestXoSoApi<XoSoApiVietnamDrawsResponse>(
-      `/api/v1/vietnam/draws?date=${isoDate}&region=MT&limit=10`,
-      revalidateSeconds
-    ),
-    requestXoSoApi<XoSoApiVietnamDrawsResponse>(
-      `/api/v1/vietnam/draws?date=${isoDate}&region=MB&limit=10`,
-      revalidateSeconds
-    ),
+    needFetchSouth
+      ? requestXoSoApi<XoSoApiVietnamDrawsResponse>(
+          `/api/v1/vietnam/draws?date=${isoDate}&region=MN&limit=10`,
+          revalidateSeconds
+        )
+      : Promise.resolve(null),
+    needFetchCentral
+      ? requestXoSoApi<XoSoApiVietnamDrawsResponse>(
+          `/api/v1/vietnam/draws?date=${isoDate}&region=MT&limit=10`,
+          revalidateSeconds
+        )
+      : Promise.resolve(null),
+    needFetchNorth
+      ? requestXoSoApi<XoSoApiVietnamDrawsResponse>(
+          `/api/v1/vietnam/draws?date=${isoDate}&region=MB&limit=10`,
+          revalidateSeconds
+        )
+      : Promise.resolve(null),
   ]);
 
-  if (mnRes.ok) {
-    south = extractDrawsFromVietnamResponse(mnRes.data, isoDate)
-      .map((d) => mapApiDrawToProvinceDrawResult(d, 'south', compactKey))
-      .filter((item): item is ProvinceDrawResult => item !== null);
-  } else {
-    lastWarning = mnRes.reason;
+  if (mnRes) {
+    if (mnRes.ok) {
+      const parsed = filterDrawsBySchedule(
+        extractDrawsFromVietnamResponse(mnRes.data, isoDate)
+          .map((d) => mapApiDrawToProvinceDrawResult(d, 'south', compactKey))
+          .filter((item): item is ProvinceDrawResult => item !== null),
+        'south',
+        date
+      );
+      if (parsed.length > 0) {
+        south = parsed;
+        fetchedSouthFromApi = true;
+      }
+    } else {
+      lastWarning = mnRes.reason;
+    }
   }
 
-  if (mtRes.ok) {
-    central = extractDrawsFromVietnamResponse(mtRes.data, isoDate)
-      .map((d) => mapApiDrawToProvinceDrawResult(d, 'central', compactKey))
-      .filter((item): item is ProvinceDrawResult => item !== null);
-  } else if (!lastWarning) {
-    lastWarning = mtRes.reason;
+  if (mtRes) {
+    if (mtRes.ok) {
+      const parsed = filterDrawsBySchedule(
+        extractDrawsFromVietnamResponse(mtRes.data, isoDate)
+          .map((d) => mapApiDrawToProvinceDrawResult(d, 'central', compactKey))
+          .filter((item): item is ProvinceDrawResult => item !== null),
+        'central',
+        date
+      );
+      if (parsed.length > 0) {
+        central = parsed;
+        fetchedCentralFromApi = true;
+      }
+    } else if (!lastWarning) {
+      lastWarning = mtRes.reason;
+    }
   }
 
-  if (mbRes.ok) {
-    north = extractDrawsFromVietnamResponse(mbRes.data, isoDate)
-      .map((d) => mapApiDrawToProvinceDrawResult(d, 'north', compactKey))
-      .filter((item): item is ProvinceDrawResult => item !== null);
-  } else if (!lastWarning) {
-    lastWarning = mbRes.reason;
+  if (mbRes) {
+    if (mbRes.ok) {
+      const parsed = filterDrawsBySchedule(
+        extractDrawsFromVietnamResponse(mbRes.data, isoDate)
+          .map((d) => mapApiDrawToProvinceDrawResult(d, 'north', compactKey))
+          .filter((item): item is ProvinceDrawResult => item !== null),
+        'north',
+        date
+      );
+      if (parsed.length > 0) {
+        north = parsed;
+        fetchedNorthFromApi = true;
+      }
+    } else if (!lastWarning) {
+      lastWarning = mbRes.reason;
+    }
   }
 
-  const todayIso = toIsoDateString(new Date());
-  // Nếu hôm nay thiếu bất kỳ miền nào (VD: Miền Bắc chưa trả về từ v1/draws hoặc vừa quay xong),
-  // tự động gọi bổ sung /api/latest-draws-vn để lấp đầy từng miền còn thiếu!
-  if (isoDate === todayIso && (south.length === 0 || central.length === 0 || north.length === 0)) {
+  // Chỉ gọi bổ sung /api/latest-draws-vn khi HÔM NAY có ít nhất 1 miền đang live/done mà v1/draws chưa trả về
+  const missingActiveSouth = needFetchSouth && south.length === 0;
+  const missingActiveCentral = needFetchCentral && central.length === 0;
+  const missingActiveNorth = needFetchNorth && north.length === 0;
+
+  if (isTodayTarget && (missingActiveSouth || missingActiveCentral || missingActiveNorth)) {
     const latestRes = await requestXoSoApi<XoSoApiLatestDrawsResponse>(
       '/api/latest-draws-vn',
       Math.min(revalidateSeconds, 30)
     );
     if (latestRes.ok && latestRes.data && !latestRes.data.error) {
       const payload = latestRes.data;
-      if (north.length === 0) {
+      if (missingActiveNorth) {
         const mbAll = Array.isArray(payload.mienBac)
           ? payload.mienBac
           : payload.mienBac
           ? [payload.mienBac]
           : [];
-        const mbToday = mbAll.filter((d) => (d.date || '').slice(0, 10) === isoDate);
-        const mbToUse = mbToday.length > 0 ? mbToday : mbAll;
-        north = mbToUse
-          .map((d) => mapApiDrawToProvinceDrawResult(d, 'north', compactKey))
-          .filter((item): item is ProvinceDrawResult => item !== null);
+        const mbToday = mbAll.filter((d) => (d.date || d.draw_date || '').slice(0, 10) === isoDate);
+        const parsed = filterDrawsBySchedule(
+          mbToday
+            .map((d) => mapApiDrawToProvinceDrawResult(d, 'north', compactKey))
+            .filter((item): item is ProvinceDrawResult => item !== null),
+          'north',
+          date
+        );
+        if (parsed.length > 0) {
+          north = parsed;
+          fetchedNorthFromApi = true;
+        }
       }
-      if (central.length === 0) {
+      if (missingActiveCentral) {
         const mtAll = Array.isArray(payload.mienTrung) ? payload.mienTrung : [];
-        const mtToday = mtAll.filter((d) => (d.date || '').slice(0, 10) === isoDate);
-        const mtToUse = mtToday.length > 0 ? mtToday : mtAll;
-        central = mtToUse
-          .map((d) => mapApiDrawToProvinceDrawResult(d, 'central', compactKey))
-          .filter((item): item is ProvinceDrawResult => item !== null);
+        const mtToday = mtAll.filter((d) => (d.date || d.draw_date || '').slice(0, 10) === isoDate);
+        const parsed = filterDrawsBySchedule(
+          mtToday
+            .map((d) => mapApiDrawToProvinceDrawResult(d, 'central', compactKey))
+            .filter((item): item is ProvinceDrawResult => item !== null),
+          'central',
+          date
+        );
+        if (parsed.length > 0) {
+          central = parsed;
+          fetchedCentralFromApi = true;
+        }
       }
-      if (south.length === 0) {
+      if (missingActiveSouth) {
         const mnAll = Array.isArray(payload.mienNam) ? payload.mienNam : [];
-        const mnToday = mnAll.filter((d) => (d.date || '').slice(0, 10) === isoDate);
-        const mnToUse = mnToday.length > 0 ? mnToday : mnAll;
-        south = mnToUse
-          .map((d) => mapApiDrawToProvinceDrawResult(d, 'south', compactKey))
-          .filter((item): item is ProvinceDrawResult => item !== null);
+        const mnToday = mnAll.filter((d) => (d.date || d.draw_date || '').slice(0, 10) === isoDate);
+        const parsed = filterDrawsBySchedule(
+          mnToday
+            .map((d) => mapApiDrawToProvinceDrawResult(d, 'south', compactKey))
+            .filter((item): item is ProvinceDrawResult => item !== null),
+          'south',
+          date
+        );
+        if (parsed.length > 0) {
+          south = parsed;
+          fetchedSouthFromApi = true;
+        }
       }
     }
   }
 
+  // Lưu bền vững các miền vừa lấy được từ API vào PostgreSQL để tái sử dụng vĩnh viễn (0 request cho lần sau)
+  const dbWrites: Promise<void>[] = [];
+  if (fetchedSouthFromApi && south.length > 0) {
+    const finalized = isPastTarget || isRegionDrawFinalized(south, 'south', date);
+    dbWrites.push(saveRegionDrawsToDb(isoDate, 'south', sortProvincesCanonical(south), finalized));
+  }
+  if (fetchedCentralFromApi && central.length > 0) {
+    const finalized = isPastTarget || isRegionDrawFinalized(central, 'central', date);
+    dbWrites.push(saveRegionDrawsToDb(isoDate, 'central', sortProvincesCanonical(central), finalized));
+  }
+  if (fetchedNorthFromApi && north.length > 0) {
+    const finalized = isPastTarget || isRegionDrawFinalized(north, 'north', date);
+    dbWrites.push(saveRegionDrawsToDb(isoDate, 'north', sortProvincesCanonical(north), finalized));
+  }
+  if (dbWrites.length > 0) {
+    // Chờ nhẹ tối đa tránh mất write trên serverless
+    await Promise.allSettled(dbWrites);
+  }
+
+  // Trong khung giờ ĐANG SỔ của hôm nay: luôn tạo đủ đúng danh sách đài mở thưởng theo lịch ngày hôm nay
+  // (chạy TRƯỚC kiểm tra rỗng để không bao giờ fallback về ngày hôm qua khi miền đang quay trực tiếp)
+  if (isMnLive) {
+    south = ensureScheduledLiveProvinces(south, 'south', date, compactKey);
+  }
+  if (isMtLive) {
+    central = ensureScheduledLiveProvinces(central, 'central', date, compactKey);
+  }
+  if (isMbLive) {
+    north = ensureScheduledLiveProvinces(north, 'north', date, compactKey);
+  }
+
   if (south.length > 0 || central.length > 0 || north.length > 0) {
-    // Trong khung giờ quay trực tiếp của hôm nay, đảm bảo đủ các đài theo lịch
-    // (đài chưa ra giải nào sẽ hiển thị các ô loading/xoay chờ quay)
-    if (isoDate === todayIso && isLiveWindow) {
-      const utcMs = Date.now() + new Date().getTimezoneOffset() * 60_000;
-      const vnNow = new Date(utcMs + 7 * 3600_000);
-      const mins = vnNow.getHours() * 60 + vnNow.getMinutes();
-
-      if (mins >= 16 * 60 + 15 && mins <= 16 * 60 + 45) {
-        south = ensureScheduledLiveProvinces(south, 'south', date, compactKey);
-      }
-      if (mins >= 17 * 60 + 15 && mins <= 17 * 60 + 45) {
-        central = ensureScheduledLiveProvinces(central, 'central', date, compactKey);
-      }
-      if (mins >= 18 * 60 + 15 && mins <= 18 * 60 + 45) {
-        north = ensureScheduledLiveProvinces(north, 'north', date, compactKey);
-      }
-    }
-
     south = sortProvincesCanonical(south);
     central = sortProvincesCanonical(central);
     north = sortProvincesCanonical(north);
@@ -804,15 +945,23 @@ export async function fetchLotteryResultsByDate(
       north,
     };
 
-    const hasAllThreeRegions = south.length > 0 && central.length > 0 && north.length > 0;
-    const effectiveRevalidate = hasAllThreeRegions
-      ? revalidateSeconds
-      : Math.min(revalidateSeconds, 30);
+    const allThreeDone =
+      (southFinalizedInDb || isRegionDrawFinalized(south, 'south', date)) &&
+      (centralFinalizedInDb || isRegionDrawFinalized(central, 'central', date)) &&
+      (northFinalizedInDb || isRegionDrawFinalized(north, 'north', date));
+
+    const effectiveRevalidate = hasAnyLiveRegion
+      ? LIVE_CACHE_SECONDS
+      : isPastTarget
+      ? PAST_DATE_CACHE_SECONDS
+      : allThreeDone
+      ? NORMAL_CACHE_SECONDS
+      : 120; // Giữa các khung giờ quay (VD: 16:50 sau khi MN xổ xong, chờ 17:15 MT)
 
     const envelope: XoSoServiceEnvelope<DayLotteryData> = {
       data: resultData,
       source: 'xosoapi.online',
-      isLiveWindow,
+      isLiveWindow: isLiveWindow || hasAnyLiveRegion,
       revalidateSeconds: effectiveRevalidate,
       fetchedAt: new Date().toISOString(),
       resolvedDate: isoDate,
@@ -826,70 +975,33 @@ export async function fetchLotteryResultsByDate(
     return envelope;
   }
 
-  // Trường hợp ngày mới (hôm nay) chưa tới giờ quay và chưa có dữ liệu từ API:
-  // Tự động lấy kết quả thực tế của ngày gần nhất đã có dữ liệu (hôm qua) thay vì báo trống/lỗi
+  // Trường hợp ngày mới (hôm nay) chưa tới giờ quay và chưa có dữ liệu:
+  // Tái sử dụng kết quả ngày hôm qua thông qua chính fetchLotteryResultsByDate (đọc từ PostgreSQL, 0 gọi API thừa!)
   if (isoDate >= todayIso) {
     const prevDay = new Date(date);
     prevDay.setDate(date.getDate() - 1);
-    const prevIso = toIsoDateString(prevDay);
-    const prevCompactKey = toCompactDateKey(prevDay);
+    const prevEnvelope = await fetchLotteryResultsByDate(prevDay);
 
-    const [prevMn, prevMt, prevMb] = await Promise.all([
-      requestXoSoApi<XoSoApiVietnamDrawsResponse>(
-        `/api/v1/vietnam/draws?date=${prevIso}&region=MN&limit=10`,
-        revalidateSeconds
-      ),
-      requestXoSoApi<XoSoApiVietnamDrawsResponse>(
-        `/api/v1/vietnam/draws?date=${prevIso}&region=MT&limit=10`,
-        revalidateSeconds
-      ),
-      requestXoSoApi<XoSoApiVietnamDrawsResponse>(
-        `/api/v1/vietnam/draws?date=${prevIso}&region=MB&limit=10`,
-        revalidateSeconds
-      ),
-    ]);
-
-    const prevSouth = prevMn.ok
-      ? sortProvincesCanonical(
-          extractDrawsFromVietnamResponse(prevMn.data, prevIso)
-            .map((d) => mapApiDrawToProvinceDrawResult(d, 'south', prevCompactKey))
-            .filter((item): item is ProvinceDrawResult => item !== null)
-        )
-      : [];
-    const prevCentral = prevMt.ok
-      ? sortProvincesCanonical(
-          extractDrawsFromVietnamResponse(prevMt.data, prevIso)
-            .map((d) => mapApiDrawToProvinceDrawResult(d, 'central', prevCompactKey))
-            .filter((item): item is ProvinceDrawResult => item !== null)
-        )
-      : [];
-    const prevNorth = prevMb.ok
-      ? sortProvincesCanonical(
-          extractDrawsFromVietnamResponse(prevMb.data, prevIso)
-            .map((d) => mapApiDrawToProvinceDrawResult(d, 'north', prevCompactKey))
-            .filter((item): item is ProvinceDrawResult => item !== null)
-        )
-      : [];
-
-    if (prevSouth.length > 0 || prevCentral.length > 0 || prevNorth.length > 0) {
+    if (
+      prevEnvelope.source === 'xosoapi.online' &&
+      (prevEnvelope.data.south.length > 0 ||
+        prevEnvelope.data.central.length > 0 ||
+        prevEnvelope.data.north.length > 0)
+    ) {
+      // Lưu cache ngắn tới trước mốc 16:05 hoặc tối đa 15 phút để tránh gọi lại liên tục buổi sáng
+      const morningTtl = Math.min(revalidateSeconds, 900);
       const latestEnvelope: XoSoServiceEnvelope<DayLotteryData> = {
-        data: {
-          date: prevDay.toISOString(),
-          formattedDate: formatDate(prevDay),
-          south: prevSouth,
-          central: prevCentral,
-          north: prevNorth,
-        },
+        data: prevEnvelope.data,
         source: 'xosoapi.online',
         isLiveWindow,
-        revalidateSeconds: Math.min(revalidateSeconds, 60),
+        revalidateSeconds: morningTtl,
         fetchedAt: new Date().toISOString(),
-        resolvedDate: prevIso,
+        resolvedDate: prevEnvelope.resolvedDate,
         isFallbackToLatestAvailable: true,
       };
 
       memoryCache.set(cacheKey, {
-        expiresAt: Date.now() + Math.min(revalidateSeconds, 60) * 1000,
+        expiresAt: Date.now() + morningTtl * 1000,
         envelope: latestEnvelope,
       });
       return latestEnvelope;

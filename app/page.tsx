@@ -32,6 +32,51 @@ function toIsoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+interface ClientCachedDayEnvelope {
+  data: DayLotteryData;
+  source: 'xosoapi.online' | 'fallback';
+  warning?: string;
+  isLiveWindow?: boolean;
+  revalidateSeconds?: number;
+  resolvedDate?: string;
+  isFallbackToLatestAvailable?: boolean;
+  expiresAt: number;
+}
+
+const CLIENT_CACHE_PREFIX = 'minhluan_draws_v1_';
+
+function readClientDayCache(isoDate: string): ClientCachedDayEnvelope | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${CLIENT_CACHE_PREFIX}${isoDate}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ClientCachedDayEnvelope;
+    if (!parsed?.data || !parsed.expiresAt || parsed.expiresAt < Date.now()) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeClientDayCache(
+  isoDate: string,
+  payload: Omit<ClientCachedDayEnvelope, 'expiresAt'>,
+  ttlMs: number
+) {
+  if (typeof window === 'undefined' || ttlMs <= 0) return;
+  try {
+    const entry: ClientCachedDayEnvelope = {
+      ...payload,
+      expiresAt: Date.now() + ttlMs,
+    };
+    localStorage.setItem(`${CLIENT_CACHE_PREFIX}${isoDate}`, JSON.stringify(entry));
+  } catch {
+    // Bỏ qua nếu trình duyệt đầy quota localStorage
+  }
+}
+
 export default function Page() {
   const [dark, setDark] = useState(false);
   const [checkerOpen, setCheckerOpen] = useState(false);
@@ -113,46 +158,109 @@ export default function Page() {
   }, []);
 
   const loadDrawsFromServer = useCallback(
-    async (targetDate: Date, yesterdayDate: Date, silent = false) => {
+    async (
+      targetDate: Date,
+      yesterdayDate: Date,
+      options: { silent?: boolean; todayOnly?: boolean; bypassClientCache?: boolean } = {}
+    ) => {
+      const { silent = false, todayOnly = false, bypassClientCache = false } = options;
+      const targetIso = toIsoDate(targetDate);
+      const prevIso = toIsoDate(yesterdayDate);
+      const todayIso = toIsoDate(new Date());
+      const liveNow = isAnyRegionLiveOrUpcoming(new Date());
+
+      // Đọc từ localStorage trước cho các ngày đã cache (tiết kiệm 100% API request khi F5 / chuyển ngày)
+      const cachedTarget =
+        !bypassClientCache && !(targetIso === todayIso && liveNow)
+          ? readClientDayCache(targetIso)
+          : null;
+      const cachedPrev = !todayOnly ? readClientDayCache(prevIso) : null;
+
+      if (cachedTarget) {
+        setLotteryData(cachedTarget.data);
+        setApiMeta({
+          source: cachedTarget.source,
+          warning: cachedTarget.warning,
+          isLiveWindow: cachedTarget.isLiveWindow,
+          revalidateSeconds: cachedTarget.revalidateSeconds,
+          resolvedDate: cachedTarget.resolvedDate,
+          isFallbackToLatestAvailable: Boolean(cachedTarget.isFallbackToLatestAvailable),
+        });
+      }
+      if (cachedPrev) {
+        setPrevLotteryData(cachedPrev.data);
+      }
+
+      const needFetchTarget = !cachedTarget;
+      const needFetchPrev = !todayOnly && !cachedPrev;
+
+      if (!needFetchTarget && !needFetchPrev) {
+        if (!silent) setIsLoading(false);
+        return;
+      }
+
       if (!silent) setIsLoading(true);
-      const fetchOpts: RequestInit = isAnyRegionLiveOrUpcoming()
-        ? { cache: 'no-store' }
-        : {};
+      const fetchOpts: RequestInit = targetIso === todayIso && liveNow ? { cache: 'no-store' } : {};
       try {
         const [todayRes, prevRes] = await Promise.all([
-          fetch(`/api/xoso/draws?date=${toIsoDate(targetDate)}`, fetchOpts),
-          fetch(`/api/xoso/draws?date=${toIsoDate(yesterdayDate)}`),
+          needFetchTarget ? fetch(`/api/xoso/draws?date=${targetIso}`, fetchOpts) : Promise.resolve(null),
+          needFetchPrev ? fetch(`/api/xoso/draws?date=${prevIso}`) : Promise.resolve(null),
         ]);
 
-        if (todayRes.ok) {
-          const todayJson = await todayRes.json();
-          if (todayJson?.data) {
-            setLotteryData(todayJson.data);
-            setApiMeta({
-              source: todayJson.source || 'fallback',
-              warning: todayJson.warning,
-              isLiveWindow: todayJson.isLiveWindow,
-              revalidateSeconds: todayJson.revalidateSeconds,
-              resolvedDate: todayJson.resolvedDate,
-              isFallbackToLatestAvailable: Boolean(todayJson.isFallbackToLatestAvailable),
-            });
+        if (todayRes) {
+          if (todayRes.ok) {
+            const todayJson = await todayRes.json();
+            if (todayJson?.data) {
+              setLotteryData(todayJson.data);
+              const meta = {
+                source: (todayJson.source || 'fallback') as 'xosoapi.online' | 'fallback',
+                warning: todayJson.warning,
+                isLiveWindow: todayJson.isLiveWindow,
+                revalidateSeconds: todayJson.revalidateSeconds,
+                resolvedDate: todayJson.resolvedDate,
+                isFallbackToLatestAvailable: Boolean(todayJson.isFallbackToLatestAvailable),
+              };
+              setApiMeta(meta);
+              // Lưu vào localStorage nếu là dữ liệu thật và không trong khung giờ đang sổ
+              if (meta.source === 'xosoapi.online' && !meta.isLiveWindow) {
+                const isPast = targetIso < todayIso;
+                const ttlMs = isPast
+                  ? 24 * 60 * 60 * 1000 // 24 giờ cho ngày quá khứ
+                  : Math.min((meta.revalidateSeconds || 300) * 1000, 30 * 60 * 1000);
+                writeClientDayCache(targetIso, { data: todayJson.data, ...meta }, ttlMs);
+              }
+            }
+          } else if (!silent) {
+            setLotteryData(getFallbackLotteryResults(targetDate));
           }
-        } else if (!silent) {
-          setLotteryData(getFallbackLotteryResults(targetDate));
         }
 
-        if (prevRes.ok) {
-          const prevJson = await prevRes.json();
-          if (prevJson?.data) {
-            setPrevLotteryData(prevJson.data);
+        if (prevRes) {
+          if (prevRes.ok) {
+            const prevJson = await prevRes.json();
+            if (prevJson?.data) {
+              setPrevLotteryData(prevJson.data);
+              if (prevJson.source === 'xosoapi.online' && prevIso < todayIso) {
+                writeClientDayCache(
+                  prevIso,
+                  {
+                    data: prevJson.data,
+                    source: 'xosoapi.online',
+                    resolvedDate: prevJson.resolvedDate,
+                    revalidateSeconds: prevJson.revalidateSeconds,
+                  },
+                  24 * 60 * 60 * 1000
+                );
+              }
+            }
+          } else if (!silent) {
+            setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
           }
-        } else if (!silent) {
-          setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
         }
       } catch {
         if (!silent) {
-          setLotteryData(getFallbackLotteryResults(targetDate));
-          setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
+          if (needFetchTarget) setLotteryData(getFallbackLotteryResults(targetDate));
+          if (needFetchPrev) setPrevLotteryData(getFallbackLotteryResults(yesterdayDate));
           setApiMeta({
             source: 'fallback',
             warning: 'Không thể kết nối máy chủ API. Đang hiển thị dữ liệu dự phòng.',
@@ -174,21 +282,40 @@ export default function Page() {
   );
 
   useEffect(() => {
-    loadDrawsFromServer(activeDate, prevDate, false);
+    loadDrawsFromServer(activeDate, prevDate, { silent: false });
   }, [activeDate, prevDate, loadDrawsFromServer]);
 
-  // Polling tự động mỗi 12 giây trong khung giờ cận quay & đang quay trực tiếp (giảm tối đa độ trễ)
+  // Chỉ tự động polling ngầm trong khung giờ quay thưởng trực tiếp (16:05 - 18:45) và chỉ gọi ngày hôm nay;
+  // ngoài giờ xổ tắt hoàn toàn polling để tiết kiệm tối đa lượt gọi API
   useEffect(() => {
     const todayIso = toIsoDate(new Date());
     const activeIso = toIsoDate(activeDate);
     if (activeIso !== todayIso) return;
 
-    const interval = setInterval(() => {
-      if (isAnyRegionLiveOrUpcoming(new Date())) {
-        loadDrawsFromServer(activeDate, prevDate, true);
+    const liveInterval = setInterval(() => {
+      if (document.visibilityState === 'visible' && isAnyRegionLiveOrUpcoming(new Date())) {
+        loadDrawsFromServer(activeDate, prevDate, {
+          silent: true,
+          todayOnly: true,
+          bypassClientCache: true,
+        });
       }
-    }, 12_000);
-    return () => clearInterval(interval);
+    }, 15_000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && isAnyRegionLiveOrUpcoming(new Date())) {
+        loadDrawsFromServer(activeDate, prevDate, {
+          silent: true,
+          todayOnly: true,
+          bypassClientCache: true,
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(liveInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [activeDate, prevDate, loadDrawsFromServer]);
 
   const allProvinces = useMemo(
@@ -385,6 +512,7 @@ export default function Page() {
         key: 'south' as const,
         id: 'xsmn',
         title: `KẾT QUẢ XỔ SỐ MIỀN NAM - ${lotteryData.formattedDate}`,
+        liveTitle: `TRỰC TIẾP XỔ SỐ MIỀN NAM - ${formatDate(activeDate)}`,
         regionCode: '18 Giải',
         drawTime: '16:15',
         results: lotteryData.south,
@@ -393,6 +521,7 @@ export default function Page() {
         key: 'central' as const,
         id: 'xsmt',
         title: `KẾT QUẢ XỔ SỐ MIỀN TRUNG - ${lotteryData.formattedDate}`,
+        liveTitle: `TRỰC TIẾP XỔ SỐ MIỀN TRUNG - ${formatDate(activeDate)}`,
         regionCode: '18 Giải',
         drawTime: '17:15',
         results: lotteryData.central,
@@ -401,6 +530,7 @@ export default function Page() {
         key: 'north' as const,
         id: 'xsmb',
         title: `KẾT QUẢ XỔ SỐ MIỀN BẮC - ${lotteryData.formattedDate}`,
+        liveTitle: `TRỰC TIẾP XỔ SỐ MIỀN BẮC - ${formatDate(activeDate)}`,
         regionCode: '27 Giải',
         drawTime: '18:15',
         results: lotteryData.north,
@@ -414,7 +544,18 @@ export default function Page() {
     const prioritized = items.find((i) => i.key === priorityRegion);
     const others = items.filter((i) => i.key !== priorityRegion);
     return prioritized ? [prioritized, ...others] : items;
-  }, [lotteryData, priorityRegion, activeRegionTab]);
+  }, [lotteryData, priorityRegion, activeRegionTab, activeDate]);
+
+  // Các miền đang ở trạng thái Đang sổ trực tiếp (hiện ngay trên Dashboard, ẩn các đài/ngày cũ)
+  const liveRegions = useMemo(() => {
+    if (!isToday) return [];
+    return orderedRegions.filter(
+      (board) => getRegionDrawStatus(board.key, activeDate, clockNow) === 'live'
+    );
+  }, [isToday, orderedRegions, activeDate, clockNow]);
+
+  const hasLiveRegion = liveRegions.length > 0;
+  const visibleBoards = hasLiveRegion && activeRegionTab === 'all' ? liveRegions : orderedRegions;
 
   const activeDateFormatted = formatDate(activeDate);
   const dateSlug = `${activeDate.getFullYear()}${String(activeDate.getMonth() + 1).padStart(2, '0')}${String(activeDate.getDate()).padStart(2, '0')}`;
@@ -460,39 +601,55 @@ export default function Page() {
               isLiveWindow={apiMeta.isLiveWindow}
               revalidateSeconds={apiMeta.revalidateSeconds}
               isLoading={isLoading}
-              onRefresh={() => loadDrawsFromServer(activeDate, prevDate)}
+              onRefresh={() =>
+                loadDrawsFromServer(activeDate, prevDate, {
+                  silent: false,
+                  bypassClientCache: true,
+                })
+              }
             />
 
             {/* #10: Tiêu đề KQXS & Bộ chọn miền ưu tiên */}
             <div id="kqxs-hom-nay" className="mb-4 rounded-xl border bg-card p-3.5 text-center shadow-2xs">
-              <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-foreground">
-                KẾT QUẢ XỔ SỐ KIẾN THIẾT {lotteryData.formattedDate}
-              </h1>
-
-              <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs font-bold">
-                <span className="text-muted-foreground">Chọn miền ưu tiên:</span>
-                {[
-                  { id: 'south', label: 'Miền Nam' },
-                  { id: 'north', label: 'Miền Bắc' },
-                  { id: 'central', label: 'Miền Trung' },
-                ].map((reg) => (
-                  <label key={reg.id} className="flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="priorityRegion"
-                      checked={priorityRegion === reg.id}
-                      onChange={() => {
-                        setPriorityRegion(reg.id as any);
-                        setActiveRegionTab('all');
-                      }}
-                      className="accent-red-600"
-                    />
-                    <span className={priorityRegion === reg.id ? 'text-red-600 dark:text-red-400 font-extrabold' : ''}>
-                      {reg.label}
-                    </span>
-                  </label>
-                ))}
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-foreground">
+                  {hasLiveRegion
+                    ? `TRỰC TIẾP XỔ SỐ KIẾN THIẾT ${activeDateFormatted}`
+                    : `KẾT QUẢ XỔ SỐ KIẾN THIẾT ${lotteryData.formattedDate}`}
+                </h1>
+                {hasLiveRegion && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-black text-white animate-pulse">
+                    <span>■</span> ĐANG SỔ
+                  </span>
+                )}
               </div>
+
+              {!hasLiveRegion && (
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs font-bold">
+                  <span className="text-muted-foreground">Chọn miền ưu tiên:</span>
+                  {[
+                    { id: 'south', label: 'Miền Nam' },
+                    { id: 'north', label: 'Miền Bắc' },
+                    { id: 'central', label: 'Miền Trung' },
+                  ].map((reg) => (
+                    <label key={reg.id} className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="priorityRegion"
+                        checked={priorityRegion === reg.id}
+                        onChange={() => {
+                          setPriorityRegion(reg.id as any);
+                          setActiveRegionTab('all');
+                        }}
+                        className="accent-red-600"
+                      />
+                      <span className={priorityRegion === reg.id ? 'text-red-600 dark:text-red-400 font-extrabold' : ''}>
+                        {reg.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
 
               {/* Nút chuyển nhanh Hôm nay / Hôm qua */}
               <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
@@ -526,17 +683,14 @@ export default function Page() {
                 </button>
               </div>
 
-              <div className="mt-2.5 flex items-center justify-center gap-1.5 rounded-md border border-blue-200/70 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
-                <Check className="size-4 text-emerald-600 stroke-[3]" />
-                <span>
-                  {apiMeta.isFallbackToLatestAvailable
-                    ? `Chưa tới giờ mở thưởng hôm nay — đang hiển thị kết quả kỳ gần nhất (${lotteryData.formattedDate}) » `
-                    : `Xổ Số ${isToday ? 'hôm nay' : `ngày ${lotteryData.formattedDate}`} đã cập nhật » `}
-                  <Link href={`/ngay/${dateSlug}`} className="underline hover:text-red-600">
-                    Xem thêm trang kết quả xổ số theo ngày!...
-                  </Link>
-                </span>
-              </div>
+              {apiMeta.isFallbackToLatestAvailable && !hasLiveRegion && (
+                <div className="mt-2.5 flex items-center justify-center gap-1.5 rounded-md border border-blue-200/70 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
+                  <Check className="size-4 text-emerald-600 stroke-[3]" />
+                  <span>
+                    Chưa tới giờ mở thưởng hôm nay — đang hiển thị kết quả kỳ gần nhất ({lotteryData.formattedDate})
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* KẾT QUẢ TRA CỨU TRỰC TIẾP TỪ CỘT TRÁI */}
@@ -568,14 +722,15 @@ export default function Page() {
               </div>
             )}
 
-            {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (3 MIỀN) HOẶC CẬN GIỜ QUAY / SKELETON LOADING */}
+            {/* BẢNG KẾT QUẢ XỔ SỐ NGÀY HÔM NAY (ưu tiên hiện trực tiếp miền Đang sổ, bỏ đài/ngày cũ) */}
             {activeRegionTab !== 'vietlott' && (
               isLoading ? (
-                <LotteryBoardSkeleton count={3} />
+                <LotteryBoardSkeleton count={hasLiveRegion ? 1 : 3} />
               ) : (
                 <div className="flex flex-col gap-6">
-                  {orderedRegions.map((board) => {
+                  {visibleBoards.map((board) => {
                     const phase = getRegionDrawStatus(board.key, activeDate, clockNow);
+                    const isLiveBoard = phase === 'live';
                     // Cận giờ mở thưởng (trước giờ quay 5-10 phút): hiển thị lịch mở thưởng + spinner xoay
                     if (phase === 'upcoming') {
                       return (
@@ -592,11 +747,12 @@ export default function Page() {
                       <RegionLotteryBoard
                         key={board.id}
                         id={board.id}
-                        title={board.title}
+                        title={isLiveBoard ? board.liveTitle : board.title}
                         regionCode={board.regionCode}
                         drawTime={board.drawTime}
-                        dateStr={lotteryData.formattedDate}
+                        dateStr={isLiveBoard ? activeDateFormatted : lotteryData.formattedDate}
                         results={board.results}
+                        isLive={isLiveBoard}
                       />
                     );
                   })}
@@ -604,8 +760,8 @@ export default function Page() {
               )
             )}
 
-            {/* KHỐI HIỂN THỊ KẾT QUẢ XỔ SỐ NGÀY TRƯỚC ĐÓ (HÔM QUA) — chỉ hiển thị khi ở tab Home (all) */}
-            {activeRegionTab === 'all' && (
+            {/* KHỐI HIỂN THỊ KẾT QUẢ XỔ SỐ NGÀY TRƯỚC ĐÓ (HÔM QUA) — ẩn hoàn toàn khi đang sổ trực tiếp */}
+            {activeRegionTab === 'all' && !hasLiveRegion && (
               <section className="mt-8 overflow-hidden rounded-xl border-2 border-amber-500/40 bg-card shadow-sm">
                 <button
                   type="button"

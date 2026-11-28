@@ -85,3 +85,13 @@ export const vipSubscriptions = pgTable('vip_subscriptions', {
   status: text('status').notNull().default('ACTIVE'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const lotteryDrawsCache = pgTable('lottery_draws_cache', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  drawDate: date('draw_date').notNull(), // YYYY-MM-DD
+  region: text('region').notNull(), // 'south' | 'central' | 'north'
+  resultsJson: text('results_json').notNull(),
+  isComplete: boolean('is_complete').notNull().default(false),
+  source: text('source').notNull().default('xosoapi.online'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});

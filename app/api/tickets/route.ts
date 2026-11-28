@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { asc, desc, eq } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
+import { getSessionUser, isSuperAdminUser } from '@/lib/auth';
+import { getEarliestValidSouthDrawDate } from '@/lib/draw-schedule-status';
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,12 +36,22 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const sessionUser = await getSessionUser();
+    if (!isSuperAdminUser(sessionUser)) {
+      return NextResponse.json(
+        { error: 'Chỉ tài khoản Quản Trị Hệ Thống (SUPER_ADMIN) mới có quyền đăng vé.' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const province = String(body.province || '').trim();
     const drawDate = String(body.drawDate || '').trim();
     const ticketNumber = String(body.ticketNumber || '').replace(/\D/g, '').slice(0, 6);
     const imageUrl = String(body.imageUrl || '/images/ticket-sample-1.jpg').trim();
-    const availableQty = Math.max(1, Number(body.availableQty) || 16);
+    // Chỉ hỗ trợ đúng 2 định mức bán online: 16 vé hoặc Cặp nguyên (160 vé)
+    const rawQty = Number(body.availableQty);
+    const availableQty = rawQty === 160 ? 160 : 16;
     const pricePerTicket = Math.max(10000, Number(body.pricePerTicket) || 10000);
     const showBadge = Boolean(body.showBadge);
     const badgeText = showBadge ? String(body.badgeText || 'Nổi bật').trim() : null;
@@ -47,6 +59,16 @@ export async function POST(request: NextRequest) {
     if (!province || !drawDate || ticketNumber.length !== 6) {
       return NextResponse.json(
         { error: 'Vui lòng nhập đầy đủ Tên đài, Ngày xổ và 6 chữ số vé.' },
+        { status: 400 }
+      );
+    }
+
+    const { minDrawDate } = getEarliestValidSouthDrawDate();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(drawDate) || drawDate < minDrawDate) {
+      return NextResponse.json(
+        {
+          error: `Ngày mở thưởng không hợp lệ hoặc đã qua giờ xổ (16:15 giờ VN). Vui lòng chọn từ ngày ${minDrawDate.split('-').reverse().join('/')} trở đi.`,
+        },
         { status: 400 }
       );
     }
@@ -75,6 +97,14 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const sessionUser = await getSessionUser();
+    if (!isSuperAdminUser(sessionUser)) {
+      return NextResponse.json(
+        { error: 'Chỉ tài khoản Quản Trị Hệ Thống (SUPER_ADMIN) mới có quyền cập nhật vé.' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const id = String(body.id || '');
     if (!id) {
